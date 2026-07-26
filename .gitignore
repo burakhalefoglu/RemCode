@@ -1,0 +1,121 @@
+# === RemLinkAgent .gitignore ===
+
+# --- Operating System ---
+.DS_Store
+Thumbs.db
+desktop.ini
+docs/
+# --- Editors / IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cursor/
+
+# --- Go (CLI + Server) ---
+/bin/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+# Go workspace (personal)
+go.work
+go.work.sum
+
+# --- Flutter / Dart (mobile) ---
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/build/
+mobile/.pub-cache/
+mobile/.pub/
+mobile/coverage/
+**/generated_plugin_registrant.dart
+*.flutter-plugins
+*.dart_tool/
+# Flutter web build
+mobile/web/icons/Icon-*.png
+# iOS (mobile/ios/)
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+mobile/ios/Flutter/Flutter.framework
+mobile/ios/Flutter/Flutter.podspec
+mobile/ios/Flutter/Generated.xcconfig
+mobile/ios/Flutter/flutter_export_environment.sh
+mobile/ios/ServiceDefinitions.json
+mobile/ios/Runner/GeneratedPluginRegistrant.*
+mobile/ios/Flutter/App.framework
+mobile/ios/Flutter/engine
+# Android (mobile/android/)
+mobile/android/.gradle/
+mobile/android/captures/
+mobile/android/gradlew
+mobile/android/local.properties
+mobile/android/**/GeneratedPluginRegistrant.*
+mobile/android/key.properties
+mobile/android/app/debug
+mobile/android/app/release
+*.keystore
+*.jks
+
+# --- Website (V1) ---
+website/node_modules/
+website/.next/
+website/dist/
+website/.astro/
+website/.env
+website/.env.*
+
+# --- watchOS / Wear OS (vision phases) ---
+watchos/build/
+wearos/build/
+watchos/DerivedData/
+wearos/.gradle/
+watchos/xcuserdata/
+wearos/.idea/
+
+# --- Environment / Secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.cer
+*.cert
+secrets/
+
+# --- Database / Runtime ---
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+data/
+tmp/
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Build / Packaging ---
+deploy/data/
+deploy/volumes/
+*.tar.gz
+*.zip
+
+# --- Test coverage reports ---
+coverage.out
+coverage.html
+lcov.info
+
+# --- License (personal/private) ---
+# NOTE: The AGPL header template LICENSE_HEADER is tracked.
+# Only personal license files (if any) are ignored.
+license-personal.*
