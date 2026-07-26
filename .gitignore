@@ -4,7 +4,8 @@
 .DS_Store
 Thumbs.db
 desktop.ini
-docs/
+# --- Private documentation (internal roadmaps, PRD, license templates) ---
+/documentation/*
 # --- Editors / IDE ---
 .vscode/
 .idea/
