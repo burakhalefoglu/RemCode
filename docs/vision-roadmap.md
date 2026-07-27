@@ -1,15 +1,20 @@
 # 🔭 RemLinkAgent — Vision Roadmap
 
-> **Version:** 2.0 · **Updated:** 2026-07-27 · **Status:** ON HOLD
+> **Version:** 3.0 · **Updated:** 2026-07-27 · **Status:** ON HOLD
 > **Prerequisite:** [`roadmap.md`](roadmap.md) P0–P4 **and** M1 shipped.
 
-Everything here increases the product's value without being required for it to survive. Each phase begins by answering *"should we do this now?"* with metrics and community input — not with the order they happen to appear in.
+Everything here increases the product's value without being required for it to work. Each phase begins by answering *"should we do this now?"* with measurements, not with the order it happens to appear in.
 
-**Ordering logic**
+## What changed in v3.0
 
-- **Managed cloud is not here.** It funds the project, so it sits in the main roadmap as [M1](roadmap.md#m1--managed-cloud-subscriptions--team).
-- **X1 first** — role delegation and multi-project is what users ask for once they are comfortable with hot-swap. Fastest return.
-- **X6 last** — Loop Engineering is research-grade. Do not start it before "how often is the AI wrong?" is an actual measured number.
+[ADR-013](decisions.md#adr-013--the-product-is-cross-verification-not-an-agent) moved the centre of the product. Two former vision phases are no longer here:
+
+| Was | Now |
+| :--- | :--- |
+| **X1** Multi-model orchestration | **Core** — it is the product ([P1](roadmap.md#p1--orchestrator)) |
+| **X6** Loop Engineering tiers 1–4 | Deterministic gates **ship today**; cross-model review is [P1](roadmap.md#p1--orchestrator); only the heavy tiers remain, as X1 below |
+
+Remaining phases renumbered accordingly.
 
 ---
 
@@ -17,134 +22,96 @@ Everything here increases the product's value without being required for it to s
 
 | Feature | Reason | Revisit when |
 | :--- | :--- | :--- |
-| **Role delegation + multi-project** | Single-model, single-project has to be validated first — though this is the cheapest to add | Active users pass threshold → **X1** |
+| **Deeper verification tiers** | Mutation and fuzzing are slow and expensive; black-box exploration is research-grade. Cheaper gates must prove their catch rate first | Cross-model review's catch rate is measured and the ceiling is visible |
 | **Voice control** | Extra platform surface (audio routing, interruptions); value unproven | Hands-free demand is actually measured |
-| **Apple Watch / Wear OS** | Separate native projects; a small surface for the cost | A solid user base exists |
-| **Advanced AirPods (CallKit)** | High App Store rejection risk | Later |
-| **Terminal mirroring (PTY)** | Highest engineering risk in the project, weakest differentiator ([ADR-005](decisions.md#adr-005--mvp-is-an-agent-not-a-terminal-mirror)) | Users report the agent is not enough |
-| **Loop Engineering tiers 1–4** | Research-grade. Riskiest thing in the plan | "The AI wrote the wrong thing" becomes a measured, frequent complaint → **X6** |
+| **Smartwatches** | Separate native projects; small surface for the cost | A solid user base exists |
+| **Terminal mirroring** | Highest engineering risk, weakest differentiator — `ssh` and `tmux` already do it well | Users report the orchestrator alone is insufficient |
 
 ---
 
-## X1 — Multi-model orchestration
+## X1 — Deeper verification tiers
 
-**Goal:** role-based delegation and multi-project. The natural extension of MVP hot-swap.
-**Estimate:** 4 weeks
+**Goal:** push cross-verification past what a reviewing model can find by reading.
+**Estimate:** 8–10 weeks — the largest and riskiest phase.
+**Reference:** [`loop-engineering.md`](loop-engineering.md)
 
-Once someone is comfortable switching models by hand, the next thing they want is for it to happen automatically — a cheap model writing, a strict one reviewing — and for it to work across more than one repository.
+> ⚠️ **Do not start before the catch rate of P1's cross-model review is a measured number.** If a reviewing model already finds most of what matters, mutation testing buys little for a great deal of time. If it plateaus early, this is where the ceiling lifts.
 
-- [ ] **X1.1** AI Roles screen: Coder / Reviewer / Architect → model assignment.
-- [ ] **X1.2** Role-based routing: plan → Architect, implement → Coder, review diff → Reviewer.
-- [ ] **X1.3** Multi-project binding + project switcher.
-- [ ] **X1.4** Per-project model/role configuration (`model_configs` table).
-- [ ] **X1.5** Cost and usage reporting per provider, summarised on mobile.
-- [ ] **X1.6** Deeper observability, mobile and server.
-- [ ] **X1.7** Beta polish: onboarding tour, empty states, haptics.
+- [ ] **X1.1** **Mutation testing:** deliberately break the code, confirm the tests notice. The strongest available answer to "are these tests real?"
+- [ ] **X1.2** **Fuzzing:** generated inputs against public interfaces; failures become permanent regression tests.
+- [ ] **X1.3** **Black-box explorer:** an agent whose isolation is enforced at the tool-permission level — **it cannot read implementation source**. It tests what the interface promises rather than what the code does, and the gap between those is where bugs live.
+- [ ] **X1.4** **Property-based testing:** invariants over generated inputs rather than fixed examples.
+- [ ] **X1.5** **SAST integration** with fake-green detection — a scanner configured to find nothing reports nothing.
+- [ ] **X1.6** **Tier 4 periodic:** self-audit, cross-feature exploration, adversarial simulation.
+- [ ] **X1.7** Cost controls: heavy tiers are opt-in per project with a visible budget.
 
-**Done when** roles are assignable, "add Stripe" flows Architect → Coder → Reviewer, and switching projects is seamless.
+**Done when** a deliberately introduced defect that survives Tier 2 is caught by Tier 3, and the marginal catch rate over Tier 2 is measured rather than asserted.
 
 ---
 
 ## X2 — Voice control
 
-**Goal:** hands-free operation over AirPods or any BLE headset — chat, model switching, approvals.
+**Goal:** hands-free operation over AirPods or any BLE headset — check status, review findings, approve.
 **Estimate:** 2 weeks
 
 Flutter plugins only; no native code at this stage.
 
-- [ ] **X2.1** `audio_session`: `playAndRecord`, `voiceChat` mode, Bluetooth A2DP + HFP.
-- [ ] **X2.2** Headset detection and automatic routing (route-change listener).
+- [ ] **X2.1** `audio_session`: `playAndRecord`, `voiceChat`, Bluetooth A2DP + HFP.
+- [ ] **X2.2** Headset detection and automatic routing.
 - [ ] **X2.3** Interruption handling — an incoming call pauses and resumes cleanly.
 - [ ] **X2.4** `speech_to_text`: on-device with cloud fallback, TR + EN, streaming partial results.
-- [ ] **X2.5** Command grammar: `chat <message>`, `switch model <name>`, `status`, `approve`, `reject`.
-- [ ] **X2.6** Intent parser (regex + fuzzy); free-form speech becomes a chat message.
-- [ ] **X2.7** Listening UI with live transcript.
-- [ ] **X2.8** ➕ TTS read-back (`flutter_tts`), opt-in.
-- [ ] **X2.9** Tests: intent parser units, audio-route scenarios, real hardware.
+- [ ] **X2.5** Command grammar: `status`, `read findings`, `approve`, `reject`, `cancel run`.
+- [ ] **X2.6** Intent parser; free-form speech becomes an instruction to the Coder.
+- [ ] **X2.7** ➕ TTS read-back of reviewer findings — arguably the most useful part: hearing what the reviewer found while walking.
+- [ ] **X2.8** Tests: intent parser, audio-route scenarios, real hardware.
 
-> ⚠️ **Approving a destructive command by voice needs care.** Voice recognition is probabilistic; command approval is not. Either require a second confirmation or exclude approvals from voice entirely — decide before building.
+> ⚠️ **Approving a destructive command by voice needs care.** Recognition is probabilistic; approval is not. Either require a second confirmation or exclude approvals from voice entirely — decide before building.
 
 ---
 
-## X3 — Apple Watch
+## X3 — Smartwatches
 
-**Goal:** monitoring and approvals from the wrist.
-**Estimate:** 4 weeks
+**Goal:** run status and approvals from the wrist.
+**Estimate:** 4 weeks (Apple Watch) + 4 weeks (Wear OS)
+
+The natural surface for this product: checkpoint ② is a glance and a decision, not a typing session.
+
+### Apple Watch
 
 - [ ] **X3.1** `watchos/` Xcode project (SwiftUI, watchOS 10+), App Group sharing.
-- [ ] **X3.2** WatchConnectivity bridge: `sendMessage`, `transferUserInfo`, `updateApplicationContext`.
-- [ ] **X3.3** Watch UI: status, approvals, project picker.
-- [ ] **X3.4** Complication showing agent state.
+- [ ] **X3.2** WatchConnectivity bridge.
+- [ ] **X3.3** UI: run status per project, approval prompts, findings summary.
+- [ ] **X3.4** Complication showing per-project verification state.
 - [ ] **X3.5** Push + haptic patterns; actionable notifications.
-- [ ] **X3.6** Plan-based capability: Free view-only, Pro/Team full control.
-- [ ] **X3.7** TestFlight and real-device testing.
+- [ ] **X3.6** TestFlight and real-device testing.
 
-> The watch app must decrypt locally too — the same E2E constraint as the phone ([ADR-004](decisions.md#adr-004--end-to-end-encryption-of-relay-payloads)). Key material has to reach the watch securely, which is the hard part of this phase.
+### Wear OS
 
----
+- [ ] **X3.7** `wearos/` Gradle module (Compose for Wear OS, API 33+).
+- [ ] **X3.8** Wearable Data Layer bridge.
+- [ ] **X3.9** UI parity with watchOS.
+- [ ] **X3.10** Tile + complication provider.
+- [ ] **X3.11** Play Console (Wear OS) distribution.
 
-## X4 — Wear OS
-
-**Goal:** X3 parity on Android.
-**Estimate:** 4 weeks
-
-- [ ] **X4.1** `wearos/` Gradle module (Compose for Wear OS, API 33+).
-- [ ] **X4.2** Wearable Data Layer: `MessageClient`, `DataClient`, `ChannelClient`.
-- [ ] **X4.3** Wear UI: status, approvals, project picker.
-- [ ] **X4.4** Tile + complication provider.
-- [ ] **X4.5** FCM bridge, haptics, actionable notifications.
-- [ ] **X4.6** Plan-based capability.
-- [ ] **X4.7** Play Console (Wear OS) distribution.
+> The watch must decrypt locally too ([ADR-004](decisions.md#adr-004--end-to-end-encryption-of-relay-payloads)). Getting key material to it securely is the hard part of this phase, not the UI.
 
 ---
 
-## X5 — Interactive terminal mirroring (PTY)
+## X4 — Interactive terminal mirroring
 
-**Goal:** a real interactive terminal on the phone — the capability deliberately cut from the MVP.
+**Goal:** a real interactive terminal on the phone.
 **Estimate:** 4–6 weeks
 
-Deferred by [ADR-005](decisions.md#adr-005--mvp-is-an-agent-not-a-terminal-mirror): highest engineering risk, weakest differentiator, and well served by existing tools.
+Deferred by [ADR-005](decisions.md#adr-005--mvp-is-an-agent-not-a-terminal-mirror) and unaffected by the thesis change: still the highest engineering risk and the weakest differentiator.
 
-- [ ] **X5.1** Cross-platform PTY allocation ([`creack/pty`](https://github.com/creack/pty); ConPTY on Windows).
-- [ ] **X5.2** Streaming terminal I/O over the existing encrypted transport.
-- [ ] **X5.3** Mobile terminal emulator widget: ANSI escapes, colour, cursor.
-- [ ] **X5.4** Resize propagation, signal forwarding (Ctrl-C, Ctrl-D).
-- [ ] **X5.5** On-screen key row: Tab, Esc, Ctrl, arrows.
-- [ ] **X5.6** Session persistence across reconnects.
-- [ ] **X5.7** ➕ Native `tmux` integration.
+- [ ] **X4.1** Cross-platform PTY ([`creack/pty`](https://github.com/creack/pty); ConPTY on Windows).
+- [ ] **X4.2** Streaming terminal I/O over the existing encrypted transport.
+- [ ] **X4.3** Mobile terminal emulator: ANSI escapes, colour, cursor.
+- [ ] **X4.4** Resize propagation, signal forwarding.
+- [ ] **X4.5** On-screen key row.
+- [ ] **X4.6** Session persistence across reconnects.
 
-> Revisit only if users say the agent alone is insufficient. If most requests are "I want to run one quick command", that is already the exec tool — not this.
-
----
-
-## X6 — Loop Engineering, tiers 1–4
-
-**Goal:** the optional, tiered autonomous QA pipeline. The project's original ambition.
-**Estimate:** 10–12 weeks — the largest and riskiest phase.
-**Reference:** [`loop-engineering.md`](loop-engineering.md)
-
-> ⚠️ **Deliberately last.** Everything here rests on LLM judgement and none of it is deterministic. The distance between a working demo and something trustworthy is widest in this phase. Do not begin before AI error rate is a measured number from real usage.
-
-Tier 0 already shipped in the MVP ([ADR-008](decisions.md#adr-008--loop-engineering-tier-0-ships-in-the-mvp)); it is the deterministic part, and it does not belong to this risk category.
-
-- [ ] **X6.1** `rla loop enable|disable`; `.rla/` bootstrap (`PRINCIPLES.md`, `SECURITY-BASELINE.md`, `specs/`).
-- [ ] **X6.2** Spec generation: Architect writes `.rla/specs/<feature>.md` with `SPEC-{feature}-NN` ids, `status: draft`.
-- [ ] **X6.3** `/new-feature <name>`.
-- [ ] **X6.4** Spec ratification: pipeline halts until mobile approval; `status: ratified`.
-- [ ] **X6.5** PreToolUse/PostToolUse hook framework (Go native).
-- [ ] **X6.6** **Tier 1 (inner loop):** changed-file tests, architectural conformance, fast fidelity check; 20–30 iterations.
-- [ ] **X6.7** Tier router — model-to-tier binding.
-- [ ] **X6.8** **Selective regression cache:** file hash + SPEC-ID set + config signature; skip when all three are unchanged.
-- [ ] **X6.9** Git-commit exemption — cache keys never bind to a commit SHA.
-- [ ] **X6.10** Canary tests + fail-loud + `COULD NOT VERIFY` state on mobile.
-- [ ] **X6.11** **Fake-green hunting:** assertion-free tests, inflated coverage, misconfigured SAST reporting zero findings.
-- [ ] **X6.12** **Tier 2 (convergence):** integration tests, coverage, **bidirectional spec diff** (forward: missing → FAIL; backward: unspecified behaviour → DEVIATION).
-- [ ] **X6.13** **Tier 3 (heavy):** mutation testing, fuzzing, SAST, **black-box explorer** with no source access; 2–3 iterations.
-- [ ] **X6.14** Mobile Loop dashboard + spec approval screen.
-- [ ] **X6.15** Adoption into an existing codebase: scan → draft specs + `⚠️ SUSPECTED DEVIATION` markers.
-- [ ] **X6.16** Security additions: log-leak prevention, CVE scanning, project-specific invariants.
-
-**Done when** a spec is generated, ratified on mobile, tiers run in order, a deviation is caught and corrected, and a crashed gate halts loudly instead of reporting green.
+> Revisit only if users say the orchestrator is insufficient. If most requests are "I want to run one quick command", that is the approval queue — not this.
 
 ---
 
@@ -152,33 +119,32 @@ Tier 0 already shipped in the MVP ([ADR-008](decisions.md#adr-008--loop-engineer
 
 | Risk | Impact | Likelihood | Mitigation |
 | :--- | :--- | :--- | :--- |
-| **Loop Engine never becomes trustworthy** | High | High | Staged rollout; Tier 0 already proven in MVP; X6 last |
-| Spec-diff non-determinism | High | High | Forward direction (missing) first; backward (deviation) experimental |
+| **Heavy tiers buy little over cross-model review** | High | Medium | Measure P1's catch rate first; X1 is gated on that number |
+| Black-box explorer isolation leaks | High | Medium | Enforce at the tool-permission level, not by prompting |
 | Voice approving a destructive command | **Critical** | Medium | Second confirmation, or exclude approvals from voice |
 | Watch key distribution | High | Medium | Design against the E2E model before building |
-| CallKit store rejection | Medium | High | Guideline review first; keep it late |
-| Watch development cost | Medium | Medium | Only after a strong user base |
-| Scope creep back into MVP/M1 | High | Medium | Returning to a shipped phase requires an ADR |
+| Heavy tiers make runs unaffordable | Medium | High | Opt-in per project, visible budget, hard stop |
+| Scope creep back into the MVP | High | Medium | Returning to a shipped phase requires an ADR |
 
 ---
 
 ## Prioritisation criteria
 
-Before starting any X phase, collect from MVP + M1:
+Before starting any X phase, collect from P0–P4 and M1:
 
-1. **Active users** — past the threshold?
-2. **Request categories** — what is actually asked for? (issues, discussions, email)
-3. **AI error rate** — "it wrote the wrong thing" complaints. **This is the gate for X6.**
+1. **Catch rate** — what proportion of real defects does cross-model review find? **This is the gate for X1.**
+2. **Active users** — past the threshold?
+3. **Request categories** — what is actually asked for?
 4. **Retention** — why do people leave? Missing capability, or complexity?
 5. **Contribution areas** — where are PRs arriving?
 
-> **Rule:** at least two metrics must give a strong signal. **X6 has an additional gate:** AI error rate must be instrumented and measured, not estimated.
+> **Rule:** at least two metrics must give a strong signal. **X1 has an additional gate:** catch rate must be instrumented and measured, not estimated.
 
 ---
 
 ## Glossary
 
-**Loop Engineering** — autonomous, tiered QA from spec to verification. **Tier 0–4** — verification stages (lint / inner loop / convergence / heavy / periodic). **Spec artifact** — `.rla/specs/<feature>.md` with `SPEC-NN` ids. **Fake-green** — a passing gate that proves nothing. **WatchConnectivity** — iOS phone↔watch framework. **Wearable Data Layer** — Android equivalent. **CallKit** — iOS VoIP call UI framework.
+**Mutation testing** — deliberately breaking code to confirm tests notice. **Black-box explorer** — a verifier that cannot read the implementation. **Fake-green** — a gate that passes without proving anything. **Catch rate** — proportion of real defects a verification stage finds. **WatchConnectivity** — iOS phone↔watch framework. **Wearable Data Layer** — Android equivalent.
 
 ---
 

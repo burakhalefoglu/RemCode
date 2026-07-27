@@ -109,6 +109,13 @@ function Target-Help {
         'tools'         = 'Install dev tooling (addlicense, golangci-lint)'
         'og-image'      = 'Export docs/og-image.svg -> og-image.png'
         'docs'          = 'Verify every relative doc link and heading anchor'
+        't0'            = 'Tier 0 - format, compile, vet (after every edit)'
+        't1'            = 'Tier 1 - lint, tests, conformance, fake-green'
+        't2'            = 'Tier 2 - coverage, spec fidelity, licences'
+        't3'            = 'Tier 3 - race detector, CVE scan'
+        'verify'        = 'Full sweep + checkpoint (1) - ready for a human?'
+        'canary'        = 'Prove each gate still detects deliberate breakage'
+        'spec'          = 'Spec artifact status'
         'version'       = 'Print build metadata'
         'clean'         = 'Remove build artefacts'
         'ci'            = 'Everything CI runs'
@@ -261,6 +268,21 @@ function Target-Docs {
     Invoke-Checked { go run ./scripts/checkdocs } 'checkdocs'
 }
 
+# Loop Engineering gates — docs/development-loop.md
+function Invoke-Gate([string]$Command) {
+    & go run ./scripts/gate $Command
+    # 0 passed - 1 failed - 4 could not verify. Anything non-zero blocks.
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
+function Target-T0     { Invoke-Gate 't0' }
+function Target-T1     { Invoke-Gate 't1' }
+function Target-T2     { Invoke-Gate 't2' }
+function Target-T3     { Invoke-Gate 't3' }
+function Target-Verify { Invoke-Gate 'verify' }
+function Target-Canary { Invoke-Gate 'canary' }
+function Target-Spec   { Invoke-Gate 'spec' }
+
 function Target-Version {
     Write-Host "version : $Version"
     Write-Host "commit  : $Commit"
@@ -304,6 +326,13 @@ switch ($Target.ToLowerInvariant()) {
     'tools'         { Target-Tools }
     'og-image'      { Target-OgImage }
     'docs'          { Target-Docs }
+    't0'            { Target-T0 }
+    't1'            { Target-T1 }
+    't2'            { Target-T2 }
+    't3'            { Target-T3 }
+    'verify'        { Target-Verify }
+    'canary'        { Target-Canary }
+    'spec'          { Target-Spec }
     'version'       { Target-Version }
     'clean'         { Target-Clean }
     'ci'            { Target-Ci }

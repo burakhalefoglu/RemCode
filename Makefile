@@ -201,6 +201,36 @@ og-image: ## Export docs/og-image.svg → og-image.png (needs a converter)
 docs: ## Verify every relative doc link and heading anchor resolves
 	go run ./scripts/checkdocs
 
+# ── Loop Engineering gates (docs/development-loop.md) ────────────────────────
+
+.PHONY: t0
+t0: ## Tier 0 — format, compile, vet (after every edit)
+	go run ./scripts/gate t0
+
+.PHONY: t1
+t1: ## Tier 1 — lint, tests, conformance, fake-green (every iteration)
+	go run ./scripts/gate t1
+
+.PHONY: t2
+t2: ## Tier 2 — coverage, spec fidelity, licences (at convergence)
+	go run ./scripts/gate t2
+
+.PHONY: t3
+t3: ## Tier 3 — race detector, CVE scan (candidate-complete)
+	go run ./scripts/gate t3
+
+.PHONY: verify
+verify: ## Full sweep + checkpoint ① — is this ready for a human to test?
+	go run ./scripts/gate verify
+
+.PHONY: canary
+canary: ## Prove each gate still detects deliberate breakage
+	go run ./scripts/gate canary
+
+.PHONY: spec
+spec: ## Spec artifact status
+	go run ./scripts/gate spec
+
 .PHONY: version
 version: ## Print build metadata
 	@echo "version : $(VERSION)"

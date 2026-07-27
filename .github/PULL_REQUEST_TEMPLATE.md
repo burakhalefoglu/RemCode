@@ -42,7 +42,9 @@ Closes #
 
 <!-- These are the reasons the project exists. A PR that breaks one is rejected regardless of what it enables. -->
 
-- [ ] 🔑 **Zero-Touch AI** — AI traffic and API keys still never reach the relay.
+- [ ] ⚖️ **Vendor-neutral** — no model or provider is favoured in code or defaults.
+- [ ] 🎭 **No impersonation** — no client identifier, User-Agent or header is altered to look like another tool.
+- [ ] 🔑 **Zero-Touch AI** — AI traffic and API keys still never reach the relay, and the orchestrator still holds no provider credentials.
 - [ ] 🔐 **E2E encryption** — the relay still handles ciphertext only ([ADR-004](../docs/decisions.md#adr-004--end-to-end-encryption-of-relay-payloads)).
 - [ ] 🟢 **Fail-Loud** — no new path reports success on an error.
 - [ ] 🌍 **i18n** — no hard-coded user-facing strings, in any language.

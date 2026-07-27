@@ -20,8 +20,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RemLinkAgent — an AI coding agent on your machine, driven from your phone</title>
-  <meta name="description" content="Open-source AI coding agent that runs on your own machine and is controlled from your phone. Bring your own keys, hot-swap models mid-chat, end-to-end encrypted. Works with Z.AI, Qwen, Kimi and any OpenAI-compatible provider.">
+  <title>RemLinkAgent — one model writes it, a different one proves it</title>
+  <meta name="description" content="Open-source multi-model cross-verification for AI coding. One model implements, a different vendor's model tries to disprove it against your spec, deterministic gates produce the evidence. Review and approve from your phone.">
   <meta name="author" content="Burak Halefoğlu">
   <meta name="license" content="AGPL-3.0-or-later">
   <link rel="canonical" href="https://remlinkagent.com/">
@@ -30,22 +30,22 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://remlinkagent.com/">
   <meta property="og:site_name" content="RemLinkAgent">
-  <meta property="og:title" content="RemLinkAgent — an AI coding agent on your machine, driven from your phone">
-  <meta property="og:description" content="Bring your own keys. Hot-swap models mid-chat. End-to-end encrypted. Open source, AGPL v3.">
+  <meta property="og:title" content="RemLinkAgent — one model writes it, a different one proves it">
+  <meta property="og:description" content="Coding agents say they are finished. A different model checks whether they are. Open source, AGPL v3.">
   <!--
     TODO: run `make og-image` on a machine with librsvg/ImageMagick/Inkscape to
     produce og-image.png, then switch these two to the .png and add
     og:image:type = image/png. Some crawlers (Twitter, Facebook) reject SVG.
   -->
   <meta property="og:image" content="https://remlinkagent.com/og-image.svg">
-  <meta property="og:image:alt" content="RemLinkAgent — an AI coding agent on your machine, driven from your phone">
+  <meta property="og:image:alt" content="RemLinkAgent — one model writes it, a different one proves it">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="RemLinkAgent — an AI coding agent on your machine, driven from your phone">
-  <meta name="twitter:description" content="Bring your own keys. Hot-swap models mid-chat. End-to-end encrypted. Open source, AGPL v3.">
+  <meta name="twitter:title" content="RemLinkAgent — one model writes it, a different one proves it">
+  <meta name="twitter:description" content="Coding agents say they are finished. A different model checks whether they are. Open source, AGPL v3.">
   <meta name="twitter:image" content="https://remlinkagent.com/og-image.svg">
 
   <meta name="theme-color" content="#0d1117">
@@ -238,7 +238,7 @@
     <div class="logo">🔗📱</div>
 
     <h1>RemLinkAgent</h1>
-    <p class="tagline">An AI coding agent on your machine, driven from your phone</p>
+    <p class="tagline">One model writes it. A different one proves it. You approve.</p>
 
     <div class="badge">
       <span class="dot"></span>
@@ -246,17 +246,19 @@
     </div>
 
     <p class="description">
-      The agent runs on <strong>your</strong> hardware, on <strong>your</strong> API keys, in your real
-      repository. Review its work and approve every risky command from your phone.
-      <strong>Hot-swap models mid-conversation</strong> without losing context — and everything
-      crossing our relay is <strong>end-to-end encrypted</strong>.
+      Coding agents tell you they are finished. Often they are not — a missing translation,
+      a test that asserts nothing, a bug that slipped through. <strong>The model that wrote
+      the code is the worst possible judge of whether it is right.</strong>
+      RemLinkAgent puts a <strong>different vendor's model</strong> in the reviewer's seat,
+      runs deterministic gates over the result, and shows you the evidence — from your desk
+      or your phone.
     </p>
 
     <div class="models">
-      <span class="model-chip">🐉 Z.AI</span>
-      <span class="model-chip">⚡ Qwen</span>
-      <span class="model-chip">🌙 Kimi</span>
-      <span class="model-chip muted">+ any OpenAI-compatible</span>
+      <span class="model-chip">🧑‍💻 Coder</span>
+      <span class="model-chip">🔍 Reviewer</span>
+      <span class="model-chip">🧪 Gates</span>
+      <span class="model-chip muted">any ACP agent · your subscriptions</span>
     </div>
 
     <div class="waitlist">
@@ -276,14 +278,14 @@
 
     <div class="features">
       <div class="feature">
-        <div class="feature-icon">🔄</div>
-        <div class="feature-title">Hot-swap</div>
-        <div class="feature-desc">Change model mid-chat, keep the context</div>
+        <div class="feature-icon">⚖️</div>
+        <div class="feature-title">Vendor-neutral</div>
+        <div class="feature-desc">We sell no model, so the verdict means something</div>
       </div>
       <div class="feature">
-        <div class="feature-icon">🔑</div>
-        <div class="feature-title">BYOK</div>
-        <div class="feature-desc">Your keys, your provider, zero markup</div>
+        <div class="feature-icon">📐</div>
+        <div class="feature-title">Evidence</div>
+        <div class="feature-desc">Not "done" — proof, per requirement</div>
       </div>
       <div class="feature">
         <div class="feature-icon">🔐</div>
@@ -298,10 +300,9 @@
     </div>
 
     <p class="honesty">
-      <strong>Being straight with you:</strong> there is no usable release yet — the architecture,
-      roadmap and build scaffolding are public and implementation is starting.
-      Note also that the agent lives on your machine, so that machine has to be on and running the
-      daemon for any of this to work.
+      <strong>Being straight with you:</strong> there is no usable release yet. The verification
+      gates work today — this repository is built with them — but the orchestrator that drives
+      two agents is next, not done. Everything runs on your machine, so that machine has to be on.
       <a href="https://github.com/burakhalefoglu/RemLinkAgent/blob/main/docs/roadmap.md">See the roadmap →</a>
     </p>
 

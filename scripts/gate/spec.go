@@ -172,6 +172,13 @@ func annotationIndex(root string) (map[string][]string, error) {
 		if strings.Contains(filepath.ToSlash(path), "/.rla/specs/") {
 			return nil
 		}
+		// Files that contain SPEC-shaped strings as test data — the gate's own
+		// fixtures and canaries — must declare so. Counting a fixture as a
+		// citation would let a requirement look implemented because a test
+		// mentions it.
+		if hasDirective(body, "//gate:spec-fixtures") {
+			return nil
+		}
 		for _, id := range specIDRe.FindAllString(string(body), -1) {
 			r := rel(path)
 			if !contains(index[id], r) {

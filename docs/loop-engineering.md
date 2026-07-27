@@ -1,12 +1,18 @@
 # 🔄 Loop Engineering Framework
 
-> **Version:** 3.0 · **Updated:** 2026-07-27
-> **Status:** Tier 0 ships in the MVP ([ADR-008](decisions.md#adr-008--loop-engineering-tier-0-ships-in-the-mvp)). Tiers 1–4 are deferred to [X6](vision-roadmap.md#x6--loop-engineering-tiers-14).
+> **Version:** 4.0 · **Updated:** 2026-07-27
+> **Status:** ⭐ **This is the product.** Promoted from deferred vision item to core specification by [ADR-013](decisions.md#adr-013--the-product-is-cross-verification-not-an-agent).
 > **Premise:** "everything is green" means "it follows the rules" — not "it does the right thing".
 
-The reference for RemLinkAgent's optional tiered QA pipeline: a system that requires the AI not merely to write code, but to demonstrate that the code matches an agreed specification.
+The system that requires an AI not merely to write code, but to demonstrate that the code matches an agreed specification — and that puts a **different vendor's model** in the seat that judges it.
 
-**Read this as a design document, not a manual.** Only Tier 0 exists today. Tiers 1–4 rest on LLM judgement, have no determinism, and are deliberately the last thing the project will build — see [`vision-roadmap.md`](vision-roadmap.md#x6--loop-engineering-tiers-14) for why.
+**Two halves, with different levels of certainty.**
+
+**Deterministic gates** — lint, types, tests, coverage ratchet, spec fidelity, fake-green detection, canaries. No tokens, no judgement. **These already run**: this repository is built with them ([`development-loop.md`](development-loop.md), [ADR-011](decisions.md#adr-011--the-project-is-built-with-its-own-loop)).
+
+**Cross-model verification** — a different model attempting to disprove finished work against the spec. Judgement-based, not deterministic, and its weakness is real: two models can share a blind spot. What justifies building it anyway is measurement, not theory — a project one model declared complete was put through a verification pass driven by another, which found missing translations, unwritten tests, a coverage regression, and real bugs.
+
+> **Why a model vendor cannot ship this.** The honest output of cross-verification is sometimes *"our own model got this wrong."* Only a party that sells no model can credibly arbitrate between models.
 
 ---
 
@@ -14,18 +20,22 @@ The reference for RemLinkAgent's optional tiered QA pipeline: a system that requ
 
 | Gate | Tier | Runs | Cost | Status |
 | :--- | :---: | :--- | :--- | :--- |
-| Format, lint, type/compile check | **0** | After every edit | None — deterministic | ✅ **MVP** |
-| Changed-file tests, architectural conformance, fast fidelity | 1 | Every fix iteration | Cheap model | 📋 X6 |
-| Integration, coverage, invariants, full spec fidelity, fake-green hunt | 2 | Once per feature, at convergence | Strong model | 📋 X6 |
-| Security, SAST, black-box exploration, mutation, property-based | 3 | Once, when a feature is candidate-complete | Large-context model | 📋 X6 |
-| Self-audit, cross-feature exploration, blue-hat simulation | 4 | Periodic, manual | Varies | 📋 X6 |
-| CVE scan | event | On dependency change | None | 📋 X6 |
+| Format, lint, type/compile check | **0** | After every edit | None — deterministic | ✅ **Working** |
+| Changed-file tests, architectural conformance, fake-green | **1** | Every iteration | None — deterministic | ✅ **Working** |
+| Full tests, coverage ratchet, forward spec fidelity | **2** | At convergence | None — deterministic | ✅ **Working** |
+| Race detector, CVE scan | **3** | Candidate-complete | None — deterministic | ✅ **Working** |
+| **Cross-model review** — reviewer disproves against the spec | **2** | At convergence | Reviewer's subscription | 🚧 **P1** |
+| Backward spec diff — behaviour no requirement covers | 2 | At convergence | Reviewer's subscription | 🚧 P1 |
+| Mutation, fuzzing, black-box exploration | 3 | Candidate-complete | Explorer's subscription | 📋 X1 |
+| Self-audit, cross-feature exploration | 4 | Periodic, manual | Varies | 📋 X1 |
+
+The deterministic rows run today via `go run ./scripts/gate`. The model-driven rows are what P1 adds — see [`roadmap.md`](roadmap.md#p1--orchestrator).
 
 ---
 
-## Tier 0 — what exists
+## Tier 0 — the innermost loop
 
-The deterministic part, and the only part shipping in the MVP.
+Deterministic, and running today.
 
 After every agent edit: format, lint, type-check or compile. Sub-second, no tokens, no judgement. Failures return to the agent loop as tool results, so it fixes its own mistakes before proceeding.
 
@@ -88,7 +98,7 @@ The fidelity gate diffs code against spec in **both directions**:
 
 The backward direction is the interesting one. Most architectural violations are not missing work; they are *extra* work — code nobody asked for, quietly added. Only a reverse diff finds it.
 
-> Forward is tractable. Backward is genuinely hard and non-deterministic, which is why [X6](vision-roadmap.md#x6--loop-engineering-tiers-14) sequences forward first and treats backward as experimental.
+> Forward is tractable and deterministic — it ships today. Backward needs judgement, so it becomes a reviewer task in [P1](roadmap.md#p1--orchestrator) and is treated as experimental until its catch rate is measured.
 
 ---
 
@@ -170,4 +180,4 @@ There is no perfect system — only one that knows where its blind spots are. Tw
 
 ---
 
-*Reference document. Only Tier 0 is implemented; the rest is [X6](vision-roadmap.md#x6--loop-engineering-tiers-14).*
+*The deterministic gates run today ([`development-loop.md`](development-loop.md)). Cross-model verification is [P1](roadmap.md#p1--orchestrator). Heavy tiers are [X1](vision-roadmap.md#x1--deeper-verification-tiers).*

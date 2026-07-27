@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.24"
+  GO_VERSION: "1.26.5"
 
 jobs:
   build:
@@ -71,6 +71,44 @@ jobs:
       - uses: golangci/golangci-lint-action@v6
         with:
           version: latest
+
+  loop-gate:
+    name: loop gate (canary + T0–T2)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install gate tooling
+        run: |
+          go install github.com/google/addlicense@latest
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+
+      # Canary first: a gate that cannot detect breakage makes every later
+      # green meaningless, so prove the instruments work before reading them.
+      - name: Canary — can the gates still detect breakage?
+        run: go run ./scripts/gate canary
+
+      - name: Tier 0 — format, compile, vet
+        run: go run ./scripts/gate t0
+
+      - name: Tier 1 — lint, tests, conformance, fake-green
+        run: go run ./scripts/gate t1
+
+      - name: Tier 2 — coverage ratchet, spec fidelity, licences
+        run: go run ./scripts/gate t2
+
+      # Tier 3's race detector is covered by the Linux leg of the test matrix.
+      # `verify` is deliberately NOT run here: its job is to declare
+      # human-readiness and it fails while any spec is draft — which is the
+      # correct state for a spec awaiting ratification, not a broken build.
+      - name: Spec status (informational)
+        if: always()
+        run: go run ./scripts/gate spec || true
 
   docs:
     name: documentation links

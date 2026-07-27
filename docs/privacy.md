@@ -28,7 +28,7 @@ It also has a practical purpose: App Store and Play Store privacy labels require
 
 Messages, model output, commands and their results, file contents in tool calls, approval requests. Sealed on your device or your CLI host with keys exchanged during pairing. **We hold no key capable of opening them.** Not on the server, not in backups, not under legal compulsion — the capability does not exist.
 
-Retention per [`architecture.md`](architecture.md#retention): 24 hours to 30 days depending on plan, then deleted.
+Retention per [`architecture.md`](architecture.md#sessions-streams-retention): 24 hours to 30 days depending on plan, then deleted.
 
 ### Metadata — visible to us
 

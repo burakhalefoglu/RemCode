@@ -11,12 +11,16 @@ This log exists because several early decisions (naming, licensing, scope) are *
 | [ADR-002](#adr-002--split-licensing-agpl-core-apache-20-mobile) | Split licensing: AGPL core, Apache-2.0 mobile | Locked | ❌ Hard (needs all contributors) |
 | [ADR-003](#adr-003--cla-required) | CLA required for all contributions | Locked | ⚠️ Only loosenable, never tightenable |
 | [ADR-004](#adr-004--end-to-end-encryption-of-relay-payloads) | End-to-end encryption of relay payloads | Locked | ⚠️ Medium (protocol change) |
-| [ADR-005](#adr-005--mvp-is-an-agent-not-a-terminal-mirror) | MVP is an agent, not a terminal mirror | Locked | ✅ Easy (additive later) |
+| [ADR-005](#adr-005--mvp-is-an-agent-not-a-terminal-mirror) | MVP is an agent, not a terminal mirror | **Superseded by [ADR-013](#adr-013--the-product-is-cross-verification-not-an-agent)** | — |
 | [ADR-006](#adr-006--provider-neutral-core-first-class-zaiqwenkimi) | Provider-neutral core, first-class Z.AI/Qwen/Kimi | Locked | ✅ Easy |
-| [ADR-007](#adr-007--phase-naming-scheme) | Phase naming `P0–P4` / `M1` / `X1–X6` | Locked | ✅ Easy |
-| [ADR-008](#adr-008--loop-engineering-tier-0-ships-in-the-mvp) | Loop Engineering Tier 0 ships in the MVP | Locked | ✅ Easy |
+| [ADR-007](#adr-007--phase-naming-scheme) | Phase naming `P0–P4` / `M1` / `X1–X4` | Locked | ✅ Easy |
+| [ADR-008](#adr-008--loop-engineering-tier-0-ships-in-the-mvp) | Loop Engineering Tier 0 ships in the MVP | **Superseded by [ADR-013](#adr-013--the-product-is-cross-verification-not-an-agent)** — all tiers move to the core | — |
 | [ADR-009](#adr-009--the-cli-host-must-be-reachable) | The CLI host must be reachable — stated, not hidden | Locked | ✅ Easy |
 | [ADR-010](#adr-010--public-docs-in-english-internal-prd-stays-private) | Public docs in English; internal PRD stays private | Locked | ✅ Easy |
+| [ADR-011](#adr-011--the-project-is-built-with-its-own-loop) | The project is built with its own Loop Engineering method | Locked | ✅ Easy |
+| [ADR-012](#adr-012--subscription-access-goes-through-listed-agents-never-through-us) | Subscription access goes through listed agents, never through us | Locked | ⚠️ Medium |
+| [ADR-013](#adr-013--the-product-is-cross-verification-not-an-agent) | The product is cross-verification, not an agent — **supersedes ADR-005, ADR-008** | Locked | ❌ Hard (thesis) |
+| [ADR-014](#adr-014--orchestrate-acp-agents-do-not-build-one) | Orchestrate ACP agents; do not build one | Locked | ⚠️ Medium |
 
 ---
 
@@ -80,7 +84,7 @@ Both cannot be true. **Dual-licensing is impossible unless one party holds the r
 
 ## ADR-004 — End-to-end encryption of relay payloads
 
-**Decision.** Session payloads are encrypted on the device and on the CLI host. The relay stores and forwards **opaque ciphertext plus routing metadata**. Ships in the MVP ([P2](roadmap.md#p2--server-backend-wss--nats)), not deferred.
+**Decision.** Session payloads are encrypted on the device and on the CLI host. The relay stores and forwards **opaque ciphertext plus routing metadata**. Ships in the MVP ([P2](roadmap.md#p2--relay-wss--nats)), not deferred.
 
 **Context.** "Zero-Touch AI" is true of AI API traffic — that flows directly from the CLI host to the provider. But chat messages, model output, proposed shell commands and their results all pass through the relay and are *persisted* in JetStream for the retention window. On managed cloud, that is the maintainer's server.
 
@@ -94,7 +98,7 @@ The public claim "we never touch your traffic" would therefore have been read by
 
 ## ADR-005 — MVP is an agent, not a terminal mirror
 
-**Decision.** The MVP ships an **AI coding agent** with tool-based command execution and captured output. Full interactive terminal mirroring — PTY allocation, ANSI escape handling, resize, a mobile terminal emulator — is **out of MVP scope** and moves to [X5](vision-roadmap.md#x5--interactive-terminal-mirroring-pty).
+**Decision.** The MVP ships an **AI coding agent** with tool-based command execution and captured output. Full interactive terminal mirroring — PTY allocation, ANSI escape handling, resize, a mobile terminal emulator — is **out of MVP scope** and moves to [X5](vision-roadmap.md#x4--interactive-terminal-mirroring).
 
 **Context.** The plan promised both. They are separate products with separate hard problems, and the project's own risk table already rated cross-platform PTY as its highest risk on both impact *and* likelihood.
 
@@ -130,7 +134,7 @@ The public claim "we never touch your traffic" would therefore have been read by
 
 ## ADR-008 — Loop Engineering Tier 0 ships in the MVP
 
-**Decision.** Tier 0 (format, lint, type/compile check after every agent edit — no AI cost) ships in the MVP as [P1.12](roadmap.md#p1--cli-agent). Tiers 1–4 remain in [X6](vision-roadmap.md#x6--loop-engineering-tiers-14).
+**Decision.** Tier 0 (format, lint, type/compile check after every agent edit — no AI cost) ships in the MVP as [P1.12](roadmap.md#p1--orchestrator). Tiers 1–4 remain in [X6](vision-roadmap.md#x1--deeper-verification-tiers).
 
 **Context.** Loop Engineering was deferred wholesale, correctly: tiers 1–4 rest on LLM judgement, have no determinism, and the gap between a working demo and something trustworthy is widest there.
 
@@ -159,3 +163,90 @@ The public claim "we never touch your traffic" would therefore have been read by
 **Consequences.** The frozen PRD stays private; the originals are archived under `documentation/_archive/`. UI strings are localised TR + EN via i18n keys — user-facing text is never hard-coded in either language.
 
 > ⚠️ `documentation/` is git-ignored and therefore **has no backup**. Keep a copy outside this working tree.
+
+---
+
+## ADR-011 — The project is built with its own loop
+
+**Decision.** RemLinkAgent is developed using the Loop Engineering method it will later ship as a feature. The deterministic parts run today via `go run ./scripts/gate`; the parts needing judgement are declared as owed rather than skipped. Working method: [`development-loop.md`](development-loop.md). Constitution: [`.rla/PRINCIPLES.md`](../.rla/PRINCIPLES.md) and [`.rla/SECURITY-BASELINE.md`](../.rla/SECURITY-BASELINE.md).
+
+**Context.** [`loop-engineering.md`](loop-engineering.md) describes a tiered pipeline that makes an AI demonstrate its work matches an agreed spec. As a product feature it is deferred to [X6](vision-roadmap.md#x1--deeper-verification-tiers) because tiers 1–4 depend on LLM judgement and are the riskiest thing in the plan. But the *deterministic* half — tiered gates, spec artifacts with human ratification, content-hash caching, canaries, fake-green hunting, fail-loud — needs no LLM at all.
+
+**Rationale.** Shipping a tool that makes AI verify its own work while building it some other way would be a poor advertisement, and more practically it would mean discovering the method's rough edges after users do rather than before. Two things follow that a document alone could not deliver:
+
+The flagship invariant becomes **structural**. "AI traffic never reaches the relay" is enforced as an import-graph rule: relay packages cannot import provider, agent, tool or crypto code. A promise in a document can be broken by accident; an import graph cannot.
+
+And the gates get **audited**. `gate canary` plants deliberate breakage and requires each gate to catch it. Thirteen of sixteen do. The other four wrap external tools and say so — which is the honest position, not a gap being hidden.
+
+**Consequences.** `.rla/` exists in this repository with the same layout the product will later create in a user's project, so the format is exercised before it is shipped. `COULD NOT VERIFY` is a first-class status distinct from both pass and fail, and blocks readiness. The coverage floor is a committed ratchet. CI runs the canary before the gates, because a gate that cannot detect breakage makes every later green meaningless.
+
+Running it immediately paid for itself: the first full `verify` surfaced nine stdlib CVEs in the declared Go version, three false-positive spec citations coming from test fixtures, and a race gate silently unable to run on Windows. Each is now fixed or reported honestly.
+
+**What this is not.** Tiers 1–4 of the *product* remain deferred. The judgement gates here are run by a human with an agent, not by the pipeline. That distinction is printed on every `gate verify` run so it cannot quietly erode.
+
+---
+
+## ADR-012 — Subscription access goes through listed agents, never through us
+
+**Decision.** RemLinkAgent never calls a provider's subscription endpoint. Two supported paths:
+
+| Path | How | Economics |
+| :--- | :--- | :--- |
+| **Direct** | Our code calls an OpenAI-compatible endpoint with the user's own pay-as-you-go key | PAYG rates |
+| **Delegated** | We drive a provider-listed agent (Qwen Code, Kimi Code, OpenCode…) over ACP; that agent calls the provider under its own identity with the user's own subscription | Flat subscription |
+
+**Context.** Research on 2026-07-27 against the three providers' own terms and documentation found:
+
+- **Z.AI** — "The GLM Coding Plan is limited to use within the following officially supported tools and product environments; users may not use their subscription benefits for tools or scenarios outside of this scope." Enforcement is documented: throttle → suspension → permanent ban on the third violation.
+- **Qwen / Alibaba** — supports "any third-party programming tool compatible with OpenAI or Anthropic API protocols", but excludes "custom applications: automated scripts, application backends calling the API directly". A dedicated error exists: **"Only available for Coding Agents"** — the server recognises and rejects unsupported clients.
+- **Kimi** — "Kimi Code subscriptions are for interactive use only", plus an explicit routing instruction for our exact situation: *"If you need to invoke large model capabilities in your own product, visit the Kimi Platform."* Altering client identity is prohibited by name.
+
+**Why the direct path cannot use subscriptions.** Our own client is, by definition, a third-party integration that appears on no provider's list. The only technical route to making it work is to present the identity of a listed tool — which Kimi prohibits explicitly, and which this project ruled out in its own research brief before the question arose. There is no application process to find: the providers' documented answer to product developers is "use the pay-as-you-go platform".
+
+**Why the delegated path is different in kind.** The call is made by a listed tool, under its own real identity, with a key we never see. No impersonation, no misrepresentation. Both `qwen serve` and `kimi acp` are **first-party, documented external-control interfaces** — using a published interface as published is not circumvention. The user's subscription is consumed by the tool it was licensed for.
+
+**Consequences.** The "cheap flat rate" promise is only available on the delegated path, which is what makes [ADR-014](#adr-014--orchestrate-acp-agents-do-not-build-one) load-bearing rather than a convenience. Z.AI ships no CLI, so it is reachable only through a provider-agnostic listed agent such as OpenCode. Public copy says "your own API key", never "your own subscription", until a provider lists us.
+
+> Provider terms change without notice. This entry is dated and must be re-verified at every release.
+
+---
+
+## ADR-013 — The product is cross-verification, not an agent
+
+> **Supersedes [ADR-005](#adr-005--mvp-is-an-agent-not-a-terminal-mirror) and [ADR-008](#adr-008--loop-engineering-tier-0-ships-in-the-mvp).**
+
+**Decision.** RemLinkAgent is a **multi-model cross-verification system**. One model implements; a different model verifies the result against a ratified spec and produces evidence; a human ratifies the plan and confirms the outcome. Loop Engineering moves from a deferred vision item to the centre of the product. The mobile client is the interface to checkpoint ②, not the product.
+
+**Context.** The project was scoped as a mobile-controlled coding agent. Two findings ended that framing:
+
+*It is already built, twice.* Z.AI's ZCode ships multi-model selection, multi-agent support, BYOK, QR pairing to a desktop session, phone control, and a 1.5× quota bonus for its own subscribers — a subsidy no third party can match. OpenClaw is an open-source agent runtime with ~369k stars and ~3.2M users that already dispatches sub-agents over ACP. Competing on "a nicer mobile agent" is not winnable.
+
+*The remaining gap was measured, not guessed.* The maintainer ran the workflow by hand: a Z.AI-driven agent declared a project complete; a verification pass driven by a **different** model, against the spec and the tier gates, found missing translations, unwritten tests, coverage regressions **and real bugs**. The gap between "the model says it is done" and "the work is correct" is measurable, and a second model finds it.
+
+**Why this is defensible where the previous thesis was not.** Neither incumbent does adversarial cross-verification. ZCode lets you *choose* a model; OpenClaw lets an agent *delegate* to sub-agents. Neither takes finished work and has a different vendor's model try to disprove it against a specification.
+
+And a vendor structurally cannot: the honest output of cross-verification is sometimes *"our own model got this wrong."* Z.AI's 1.5× bonus exists precisely to steer users toward GLM. **Only a party that sells no model can credibly arbitrate between models** — that is the moat, and it is unavailable to every well-resourced competitor.
+
+**Economics.** Cross-verification costs 2–3× the tokens of a single pass. At Western API prices that is prohibitive; on cheap flat-rate subscriptions it is free at the margin. The cost positioning that began as marketing turns out to be a technical prerequisite — which is why [ADR-012](#adr-012--subscription-access-goes-through-listed-agents-never-through-us) matters so much.
+
+**Consequences.** [`loop-engineering.md`](loop-engineering.md) is promoted from X6 reference to core specification. P1 becomes the orchestrator rather than an agent loop. The relay and mobile client keep their designs but move behind the orchestrator in sequence — they address the second half of the same pain ("when I leave my desk, work stops"), not a separate product. The README claim that the project "ships its own native CLI agent" is withdrawn.
+
+**Known risk, stated plainly.** Cross-verification rests on model judgement, and two models can share a blind spot. The maintainer's manual runs are evidence, not proof. The gates that produce *deterministic* evidence — spec fidelity, coverage, tests, lint — carry the weight where judgement cannot.
+
+---
+
+## ADR-014 — Orchestrate ACP agents; do not build one
+
+**Decision.** RemLinkAgent speaks the [Agent Client Protocol](https://agentclientprotocol.com/) and drives existing agents. It implements no agent loop, no tool framework, no model router and no provider adapters.
+
+**Context.** ACP is JSON-RPC 2.0 over stdio with `session/request_permission` — the agent asks the client to authorise sensitive operations. Roughly 28 agents implement it, including Qwen Code, Kimi Code, Gemini CLI, Codex CLI, OpenCode and Copilot CLI. Qwen additionally ships `qwen serve`: the same session over HTTP + SSE, with `POST /permission/:requestId` for approval votes, `Last-Event-ID` replay over an 8000-frame ring buffer, multi-client sessions, and TLS intended for mobile access.
+
+**Rationale.** The permission request *is* the approval flow this product needs; it did not have to be invented. Wrapping the protocol rather than a provider means one integration reaches every ACP agent, and the provider-agnostic ones (OpenCode, Goose, Crush) reach dozens of models each — including Z.AI, which ships no CLI of its own.
+
+It also removes the part of the plan that could not be won. An agent loop written by one person will not beat one with years of investment behind it; the orchestration and verification layer above it is unclaimed.
+
+**Consequences.** P1 loses the agent loop, tool framework, sandbox, danger classification, model router, context normalisation and provider contract tests — most of the original phase. What remains is the ACP client, multi-agent orchestration, handoff between agents, and integration with the existing gates.
+
+The cost is a dependency on other projects' protocols and release cadence. ACP being a shared standard with a registry — rather than one vendor's interface — is what makes that acceptable. Agents are configured by the user, installed through their own official installers; we orchestrate rather than redistribute, which keeps licensing and supply-chain surface out of our build.
+
+**What this does not change.** [ADR-006](#adr-006--provider-neutral-core-first-class-zaiqwenkimi) still holds for the direct PAYG path, which remains as a fallback and as the way contract tests run without a second tool installed.

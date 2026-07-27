@@ -57,32 +57,32 @@
   </text>
 
   <text x="84" y="270" class="sans" font-size="66" font-weight="800" fill="url(#title)">
-    An AI coding agent on
+    One model writes it.
   </text>
   <text x="84" y="348" class="sans" font-size="66" font-weight="800" fill="url(#title)">
-    your machine, driven
+    A different one proves
   </text>
   <text x="84" y="426" class="sans" font-size="66" font-weight="800" fill="url(#title)">
-    from your phone.
+    it. You approve.
   </text>
 
   <text x="84" y="486" class="sans" font-size="27" fill="#8b949e">
-    Bring your own keys · Hot-swap models mid-chat · End-to-end encrypted
+    Multi-model cross-verification · your subscriptions · end-to-end encrypted
   </text>
 
   <!-- provider chips -->
   <g class="sans" font-size="21" font-weight="600">
     <rect x="84"  y="524" width="118" height="46" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
-    <text x="143" y="553" fill="#e6edf3" text-anchor="middle">Z.AI</text>
+    <text x="143" y="553" fill="#e6edf3" text-anchor="middle">Coder</text>
 
     <rect x="216" y="524" width="118" height="46" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
-    <text x="275" y="553" fill="#e6edf3" text-anchor="middle">Qwen</text>
+    <text x="275" y="553" fill="#e6edf3" text-anchor="middle">Reviewer</text>
 
     <rect x="348" y="524" width="118" height="46" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
-    <text x="407" y="553" fill="#e6edf3" text-anchor="middle">Kimi</text>
+    <text x="407" y="553" fill="#e6edf3" text-anchor="middle">Gates</text>
 
     <rect x="480" y="524" width="250" height="46" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
-    <text x="605" y="553" fill="#8b949e" text-anchor="middle">+ any OpenAI-compatible</text>
+    <text x="605" y="553" fill="#8b949e" text-anchor="middle">any ACP agent</text>
   </g>
 
   <text x="1116" y="553" class="mono" font-size="20" fill="#3fb950" text-anchor="end">

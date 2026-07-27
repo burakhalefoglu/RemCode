@@ -13,7 +13,7 @@ Everything else in RemLinkAgent is AGPL-3.0-or-later. This directory is not, bec
 
 ## Status
 
-Not bootstrapped yet — this is [P0.7](../docs/roadmap.md#p0--scaffolding--de-risking):
+Not bootstrapped yet — this is [P0.7](../docs/roadmap.md#p0--scaffolding-gates--de-risking):
 
 ```bash
 flutter create --org com.remlinkagent --project-name rla_mobile \
@@ -22,4 +22,4 @@ flutter create --org com.remlinkagent --project-name rla_mobile \
 
 Then restore this README and `LICENSE`, which `flutter create` will not overwrite but which must survive the bootstrap.
 
-Architecture for the app (feature-first, Riverpod, go_router) is in [`architecture.md`](../docs/architecture.md#mobile-application).
+Architecture for the app (feature-first, Riverpod, go_router) is in [`architecture.md`](../docs/architecture.md#mobile-client).

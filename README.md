@@ -1,12 +1,10 @@
 # 🔗📱 RemLinkAgent
 
-### An AI coding agent that runs on your machine and is driven from your phone
+### One model writes it. A different one proves it. You approve.
 
-> **"Your terminal, in your pocket. Your models, your rules."**
+Coding agents tell you they are finished. Often they are not — a translation is missing, a test asserts nothing, coverage dropped, a bug slipped through. The model that wrote the code is the worst possible judge of whether the code is right.
 
-RemLinkAgent pairs your phone with a coding agent running on your own machine. You bring your own API keys, the agent works in your real repository, and you review and approve what it does from your phone — including every command it wants to run.
-
-The agent speaks to **any OpenAI-compatible provider**, with first-class support for **Z.AI, Qwen and Kimi**. AI requests go straight from your machine to your provider. Everything that passes through our relay is **end-to-end encrypted**.
+RemLinkAgent makes a **different model** verify the work against a specification you ratified, runs deterministic gates over the result, and shows you the evidence. From your desk or from your phone.
 
 [![License: AGPL v3](https://img.shields.io/badge/core-AGPL--3.0--or--later-blue.svg)](LICENSE)
 [![Mobile: Apache 2.0](https://img.shields.io/badge/mobile-Apache--2.0-green.svg)](mobile/LICENSE)
@@ -14,120 +12,104 @@ The agent speaks to **any OpenAI-compatible provider**, with first-class support
 
 ---
 
-## 🚦 Project status — read this first
+## 🚦 Status — read this first
 
-**There is no usable release yet.** The repository currently contains the architecture, the roadmap, the governance setup and a build skeleton. Phase **P0** is where implementation begins.
+**There is no usable release yet.** The repository contains the architecture, the roadmap, the governance setup, a build skeleton, and a working implementation of the verification system itself. Phase **P1** is where the orchestrator begins.
 
 | What | State |
 | :--- | :--- |
-| Architecture, protocol, threat model, roadmap | ✅ Written — see [`docs/`](docs/) |
+| Architecture, protocol, threat model, decisions | ✅ [`docs/`](docs/) |
+| **Verification gates** — tiers, spec fidelity, canaries | ✅ **Working** — `go run ./scripts/gate verify` |
 | Repo scaffolding, CI, licence automation | ✅ In place |
-| Go build skeleton (`rla`, `rla-server`) | ✅ Builds — prints version, nothing more |
-| CLI agent, relay server, Flutter app | 🚧 Not started — [P0–P4](docs/roadmap.md) |
+| Orchestrator, relay, mobile app | 🚧 Not started — [P1–P4](docs/roadmap.md) |
 
-If you are here to use it, [watch the repo](https://github.com/burakhalefoglu/RemLinkAgent/subscription) for the first release. If you are here to build it, start with [`CONTRIBUTING.md`](CONTRIBUTING.md).
-
----
-
-## 🎯 What this actually is
-
-An **agent**, not a remote terminal. It reads and writes files in your project, runs commands, and iterates — the same shape of work as a desktop coding agent, with the review surface moved to your phone.
-
-**What it does**
-
-- Reads and edits files in the repository on your machine
-- Runs commands and feeds the output back into its own loop
-- Verifies its own edits — format, lint, type-check after every change ([Tier 0](docs/loop-engineering.md))
-- Pauses and asks your phone before running anything destructive
-- Lets you switch models mid-conversation without losing context
-- Keeps working while your phone is asleep, offline, or the app is closed
-
-**What it is not**
-
-- Not a terminal emulator or screen mirror. Interactive TUIs (`vim`, `htop`, `tmux`) are out of scope for now — see [X5](docs/vision-roadmap.md#x5--interactive-terminal-mirroring-pty). For those, `ssh` and `tmux` already work well.
-- Not a cloud service that runs your code. The agent runs on **your** hardware.
-- Not a model provider. You bring your own keys and pay your provider directly.
+The gates are not a demo. This repository is built with them ([ADR-011](docs/decisions.md#adr-011--the-project-is-built-with-its-own-loop)).
 
 ---
 
-## ⚠️ The one requirement worth knowing up front
+## 🎯 The problem
 
-**Your machine has to be on, with the daemon running.** The agent lives there — that is what makes BYOK and zero-touch AI possible. If your laptop is closed, the app shows you the last known state and tells you the host is unreachable. It will not silently spin.
+A coding agent finishes a feature and reports success. Everything is green. But green means *"it followed the rules"* — not *"it did the right thing."*
 
-If you want it always available, run the daemon on a machine that is always up — a home server, a small VPS, a work desktop. See [headless deployment](docs/architecture.md#cli-host-availability).
+This was measured, not assumed. A project one model declared complete was put through a verification pass driven by a **different** model against its spec. That pass found missing translations, tests that were never written, a coverage regression, and real bugs.
 
-We would rather you learn this here than on a train.
+The gap is real, and a second model finds it.
 
----
-
-## 🔐 What our relay can and cannot see
-
-The relay exists to move events between your machine and your phone when they cannot reach each other directly. Two separate guarantees:
-
-**AI traffic never touches it.** Requests go from your machine straight to your provider. Your API keys are stored in your OS keychain and never leave the host. The relay has no code path that could carry them.
-
-**Everything else is end-to-end encrypted.** Chat messages, model output, proposed commands, command results — all encrypted on the device and on the CLI host. The relay stores and forwards ciphertext. Keys are exchanged during QR pairing and never uploaded.
-
-**What the relay still observes**, because it must in order to route:
-
-- Which devices are connected, and when
-- Message sizes, counts and timing
-- Event types (message vs. approval request) — needed for push notification routing
-
-That list is complete and is what [`privacy.md`](docs/privacy.md) commits to. Push notifications carry only an event type and an id; the text you see on your lock screen is rendered on your device after decryption.
-
-Self-hosting removes the relay operator from the picture entirely. It is free, unpaywalled, and always will be.
-
----
-
-## 🧩 Bring your own provider
-
-Any OpenAI-compatible endpoint works. These three are first-class — presets, tested tool-calling adapters, cost metadata:
-
-| Provider | Example models |
-| :--- | :--- |
-| 🐉 **Z.AI** | `glm-4.6` |
-| ⚡ **Qwen** | `qwen-2.5-coder` |
-| 🌙 **Kimi** | `moonshot-v1` |
-
-Others — DeepSeek, OpenRouter, Together, a local Ollama, OpenAI itself — work through the same configuration path. Adding one is a config entry plus a [contract test](docs/protocol.md#provider-contract-tests), not a code change.
-
-**Hot-swapping** is the feature we care most about: change model mid-conversation and keep the context. Plan with a large-context model, implement with a cheap fast one, review with a strict one — in one session, without re-explaining anything.
-
----
-
-## 🏗️ Architecture
+## 🔀 How it works
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  PHONE (Flutter)                                        │
-│  Chat · Model switcher · Command approval               │
-└──────────────────────▲──────────────────────────────────┘
-                       │ WSS · end-to-end encrypted
-┌──────────────────────▼──────────────────────────────────┐
-│  RELAY (Go)                                             │
-│  WSS gateway · NATS JetStream · APNs/FCM                │
-│  Sees ciphertext + routing metadata only                │
-└──────────────────────▲──────────────────────────────────┘
-                       │ WSS · end-to-end encrypted
-┌──────────────────────▼──────────────────────────────────┐
-│  CLI AGENT (Go) — your machine                          │
-│  Agent loop · Tools (file/exec) · Tier 0 · Model router │
-└──────────────────────┬──────────────────────────────────┘
-                       │ direct, BYOK — never via the relay
-                       ▼
-             AI provider (Z.AI / Qwen / Kimi / …)
+        ┌──────────────────────────────────────────────┐
+        │  ①  You write a spec and ratify it           │
+        └────────────────────┬─────────────────────────┘
+                             ▼
+        ┌──────────────────────────────────────────────┐
+        │  Coder      — implements it                  │
+        │               (e.g. Qwen Code, your Qwen sub)│
+        └────────────────────┬─────────────────────────┘
+                             ▼
+        ┌──────────────────────────────────────────────┐
+        │  Gates      — lint · tests · coverage ·      │
+        │               spec fidelity · fake-green     │
+        │               deterministic, no tokens        │
+        └────────────────────┬─────────────────────────┘
+                             ▼
+        ┌──────────────────────────────────────────────┐
+        │  Reviewer   — a DIFFERENT model tries to     │
+        │               disprove it against the spec   │
+        │               (e.g. Kimi Code, your Kimi sub)│
+        └────────────────────┬─────────────────────────┘
+                             ▼
+        ┌──────────────────────────────────────────────┐
+        │  ②  You read the evidence and confirm        │
+        └──────────────────────────────────────────────┘
 ```
 
-| Layer | Technology |
-| :--- | :--- |
-| CLI agent | Go — single static binary, target < 30 MB RSS |
-| Relay server | Go — `net/http` + `gorilla/websocket` |
-| Message queue | NATS JetStream — persistent, replayable |
-| Database | SQLite |
-| Mobile | Flutter — iOS + Android |
+Each role runs a **real, existing agent** — Qwen Code, Kimi Code, OpenCode — driven over the [Agent Client Protocol](https://agentclientprotocol.com/). We do not implement an agent, a model router, or a provider integration ([ADR-014](docs/decisions.md#adr-014--orchestrate-acp-agents-do-not-build-one)).
 
-Full detail: [`architecture.md`](docs/architecture.md) · [`protocol.md`](docs/protocol.md) · [`threat-model.md`](docs/threat-model.md)
+Each agent uses **your** account and **your** subscription, under its own identity. Keys never reach us.
+
+## 💰 Why this only works with cheap models
+
+Cross-verification costs 2–3× the tokens of a single pass. At Western API prices that is prohibitive. On a flat-rate coding subscription it is free at the margin — you already paid.
+
+That is why the cheap end of the market is not a marketing angle here. **It is what makes the technique affordable at all.**
+
+## 🧠 Why a model vendor cannot build this
+
+The honest output of cross-verification is sometimes *"our own model got this wrong."*
+
+Vendors ship model *pickers* and steer you toward their own — one provider gives a 1.5× quota bonus for using its first-party client. **Only a party that sells no model can credibly arbitrate between models.**
+
+---
+
+## ⚠️ What this is not
+
+- **Not another coding agent.** Use the ones you already have. We orchestrate them.
+- **Not a terminal mirror.** Interactive TUIs are out of scope — `ssh` and `tmux` already do that well.
+- **Not a model provider.** Your keys, your subscriptions, your bill — paid directly to your provider.
+- **Not a cloud runner.** Everything executes on your machine, in your repository.
+
+## 📱 Where the phone comes in
+
+Checkpoint ② is asynchronous by nature: read the evidence, approve or redirect. That is exactly what a phone is good for — and it removes the constraint that when you leave your desk, work stops.
+
+Every command an agent proposes is approved by you before it runs. Everything crossing our relay is **end-to-end encrypted**; the relay handles ciphertext and routing metadata only ([ADR-004](docs/decisions.md#adr-004--end-to-end-encryption-of-relay-payloads)). Self-hosting removes us from the picture entirely.
+
+**One requirement worth knowing:** the orchestrator runs on your machine, so that machine must be on. If it is not, the app shows the last known state and says so — it will not silently spin. For always-on use, run it on a machine that is always up ([headless deployment](docs/architecture.md#cli-host-availability)).
+
+---
+
+## 🧩 Models and agents
+
+Any [ACP](https://agentclientprotocol.com/) agent can fill any role. Provider-agnostic agents such as **OpenCode** reach dozens of models on their own — including providers that ship no CLI.
+
+| Agent | Models | Licence |
+| :--- | :--- | :--- |
+| **Qwen Code** | Qwen | Apache-2.0 |
+| **Kimi Code** | Kimi / Moonshot | Apache-2.0 |
+| **OpenCode** | provider-agnostic — GLM, DeepSeek, MiniMax, … | Open source |
+
+A direct pay-as-you-go path against any OpenAI-compatible endpoint remains available as a fallback ([ADR-012](docs/decisions.md#adr-012--subscription-access-goes-through-listed-agents-never-through-us)).
 
 ---
 
@@ -139,16 +121,13 @@ No release yet. What works today:
 git clone https://github.com/burakhalefoglu/RemLinkAgent.git
 cd RemLinkAgent
 
-make cli && make server   # builds ./bin/rla and ./bin/rla-server
-./bin/rla version         # the skeleton's only current behaviour
-
-make docker-up            # brings up NATS + the (empty) server
-make test lint            # runs green on the skeleton
+make cli && make server   # → ./bin/rla, ./bin/rla-server
+make verify               # the verification system, running on itself
+make canary               # proves each gate still detects breakage
 ```
 
-`make help` lists every target. Prerequisites and the full development setup are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
-
-Once P4 lands, installation becomes a single command and the mobile app ships to both stores.
+`make help` lists every target. Windows without GNU make: `.\scripts\make.ps1 <target>`.
+Prerequisites and setup: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
 
@@ -156,49 +135,33 @@ Once P4 lands, installation becomes a single command and the mobile app ships to
 
 | Phase | Scope | State |
 | :--- | :--- | :--- |
-| **P0** | Scaffolding, CI, provider capability spike | 🚧 Next |
-| **P1** | CLI agent: agent loop, tools, model router, hot-swap, Tier 0 | 📋 |
-| **P2** | Relay: WSS, pairing, E2E crypto, JetStream sync, push | 📋 |
-| **P3** | Flutter app: pairing, chat, model switcher, approvals | 📋 |
-| **P4** | Signed binaries, store submissions, docs, launch | 📋 |
-| **M1** | Managed Cloud + subscriptions ($5/mo Pro) — self-host stays free | 📋 |
-| **X1–X6** | Role delegation, voice, watches, Loop Engineering tiers 1–4 | 💭 |
+| **P0** | Scaffolding, CI, verification gates, ACP spike | 🚧 In progress |
+| **P1** | Orchestrator: ACP client, role assignment, coder → gates → reviewer handoff | 📋 Next |
+| **P2** | Relay: WSS, pairing, E2E, JetStream sync, push | 📋 |
+| **P3** | Mobile: spec ratification, evidence review, approvals | 📋 |
+| **P4** | Signed binaries, store submission, launch | 📋 |
+| **M1** | Managed Cloud ($5/mo) — self-host stays free and complete | 📋 |
+| **X** | Voice, smartwatches, deeper verification tiers | 💭 |
 
-Realistic solo-developer estimate for P0–P4: **17–20 weeks**. Detail and the assumptions behind that number: [`roadmap.md`](docs/roadmap.md) · [`vision-roadmap.md`](docs/vision-roadmap.md).
-
----
-
-## 🏢 Self-hosted vs. managed
-
-**Self-hosted — free, forever, full parity.** No feature is held back. Once P2 lands:
-
-```bash
-cd deploy && docker compose up -d
-```
-
-**Managed cloud — $5/month Pro, arriving in M1.** You are paying to not run a relay: uptime, push certificates, upgrades. Nothing more. AI costs always go directly to your provider. Because of end-to-end encryption, the hosted relay sees exactly as little as your own would.
+Detail and the assumptions behind the estimates: [`roadmap.md`](docs/roadmap.md).
 
 ---
 
 ## 📜 Licence
 
-| Component | Licence | Why |
-| :--- | :--- | :--- |
-| CLI + server (`cmd/`, `internal/`, `deploy/`) | [AGPL-3.0-or-later](LICENSE) | Closes the SaaS loophole — a modified hosted relay must publish its changes |
-| Mobile app (`mobile/`) | [Apache-2.0](mobile/LICENSE) | GPL-family terms conflict with App Store distribution |
+| Component | Licence |
+| :--- | :--- |
+| Orchestrator + relay (`cmd/`, `internal/`, `deploy/`, `scripts/`) | [AGPL-3.0-or-later](LICENSE) |
+| Mobile client (`mobile/`) | [Apache-2.0](mobile/LICENSE) |
 
-The split is deliberate and explained in [ADR-002](docs/decisions.md#adr-002--split-licensing-agpl-core-apache-20-mobile). Every source file carries its header; CI enforces it.
-
-Contributions require a [CLA](CLA.md) — the reasoning, including what changed from the earlier "no CLA" position, is in [ADR-003](docs/decisions.md#adr-003--cla-required).
-
----
+The split is deliberate — GPL-family terms conflict with App Store distribution ([ADR-002](docs/decisions.md#adr-002--split-licensing-agpl-core-apache-20-mobile)). Contributions require a [CLA](CLA.md) ([why](docs/decisions.md#adr-003--cla-required)).
 
 ## 🤝 Contributing
 
-Early, and the architecture is still soft in places — a good moment to influence it. Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), then [`docs/roadmap.md`](docs/roadmap.md) for what is actually next.
+Early, and the architecture is still soft in places. Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), then [`development-loop.md`](docs/development-loop.md) — this repository is built with the method it ships.
 
 Security issues: **do not** open a public issue — see [`SECURITY.md`](SECURITY.md).
 
 ---
 
-*Built for developers who want a capable coding agent on their own hardware, on their own keys, at their own cost.*
+*"Everything is green" means it follows the rules. It does not mean it does the right thing.*

@@ -92,7 +92,7 @@ Keys are never transmitted to the relay, so a relay compromise does not expose t
 ## 📦 Supply chain
 
 - Dependencies are pinned; `go.sum` and `pubspec.lock` are committed.
-- Automated CVE scanning on every dependency change ([P2.14](docs/roadmap.md#p2--server-backend-wss--nats)).
+- Automated CVE scanning on every dependency change ([P2.14](docs/roadmap.md#p2--relay-wss--nats)).
 - Release binaries are checksummed and signed ([P4.1](docs/roadmap.md#p4--release--distribution)).
 - Verify signatures before running any binary that claims to be ours.
 

@@ -1,218 +1,242 @@
 # 🏗️ Architecture
 
 > **Status:** design · **Updated:** 2026-07-27
-> Wire format: [`protocol.md`](protocol.md) · Security: [`threat-model.md`](threat-model.md) · Rationale: [`decisions.md`](decisions.md)
+> Wire formats: [`protocol.md`](protocol.md) · Security: [`threat-model.md`](threat-model.md) · Rationale: [`decisions.md`](decisions.md)
 
 ---
 
 ## The shape of it
 
-Three components. The important property is what the middle one *cannot* do.
+Four layers. The interesting property is how little each one is trusted with.
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  MOBILE (Flutter)                             Apache-2.0     │
-│  Chat · Model switcher · Approvals · Local decryption        │
-└───────────────────────────▲──────────────────────────────────┘
-                            │ WSS · sealed envelopes
-┌───────────────────────────▼──────────────────────────────────┐
-│  RELAY (Go)                                   AGPL-3.0       │
-│  WSS gateway · JetStream · Push · SQLite                     │
-│  Holds no keys. Sees ciphertext + routing metadata.           │
-└───────────────────────────▲──────────────────────────────────┘
-                            │ WSS · sealed envelopes
-┌───────────────────────────▼──────────────────────────────────┐
-│  CLI AGENT (Go) — the user's machine          AGPL-3.0       │
-│  Agent loop · Tools · Tier 0 · Model router · Keychain       │
-└───────────────────────────┬──────────────────────────────────┘
-                            │ HTTPS, direct — never via the relay
-                            ▼
-              AI provider (Z.AI / Qwen / Kimi / any OpenAI-compatible)
+┌────────────────────────────────────────────────────────────────┐
+│  MOBILE (Flutter)                               Apache-2.0     │
+│  ① Ratify spec · ② Review evidence · Approve commands          │
+└──────────────────────────▲─────────────────────────────────────┘
+                           │ WSS · sealed envelopes
+┌──────────────────────────▼─────────────────────────────────────┐
+│  RELAY (Go)                                     AGPL-3.0       │
+│  WSS gateway · JetStream · Push · SQLite                       │
+│  Holds no keys. Sees ciphertext + routing metadata.             │
+└──────────────────────────▲─────────────────────────────────────┘
+                           │ WSS · sealed envelopes
+┌──────────────────────────▼─────────────────────────────────────┐
+│  ORCHESTRATOR (Go) — the user's machine         AGPL-3.0       │
+│  ACP client · Role router · Handoff · Gates · Approval queue   │
+│  Holds no API keys either.                                      │
+└──────────────────────────┬─────────────────────────────────────┘
+                           │ ACP (JSON-RPC/stdio, or HTTP+SSE)
+        ┌──────────────────┼──────────────────┐
+        ▼                  ▼                  ▼
+  ┌───────────┐      ┌───────────┐     ┌───────────┐
+  │ Qwen Code │      │ Kimi Code │     │ OpenCode  │
+  │  CODER    │      │ REVIEWER  │     │ EXPLORER  │
+  └─────┬─────┘      └─────┬─────┘     └─────┬─────┘
+        │ own key/subscription, own identity  │
+        ▼                  ▼                  ▼
+     Qwen               Kimi            GLM / DeepSeek / …
 ```
 
-Two guarantees, often conflated, kept separate here:
+Three separations do the work:
 
-**Zero-Touch AI.** AI requests go from the CLI host straight to the provider. API keys live in the OS keychain and have no code path to the relay. This is architectural, not a policy promise.
+**We are not an agent.** Roles are filled by agents that already exist, driven over the [Agent Client Protocol](https://agentclientprotocol.com/). No agent loop, no tool framework, no model router here ([ADR-014](decisions.md#adr-014--orchestrate-acp-agents-do-not-build-one)).
 
-**End-to-end encryption.** Everything crossing the relay is sealed on the device and on the CLI host. The relay routes ciphertext. See [ADR-004](decisions.md#adr-004--end-to-end-encryption-of-relay-payloads) for why this is in the MVP rather than deferred.
+**We hold no credentials.** Each agent authenticates itself, with the user's own key or subscription, under its own real identity. The orchestrator never sees a key — and neither does the relay ([ADR-012](decisions.md#adr-012--subscription-access-goes-through-listed-agents-never-through-us)).
+
+**We sell no model.** Which is what makes a verdict of *"the Coder got this wrong"* credible ([ADR-013](decisions.md#adr-013--the-product-is-cross-verification-not-an-agent)).
 
 ---
 
-## CLI agent
+## Orchestrator
 
 The product. Everything else is transport and UI.
 
 ```
-cmd/rla/                    entry point
+cmd/rla/
 internal/
-├── agent/                  agent loop, orchestration
-├── tools/                  file / exec / search tools
-├── models/                 provider adapters, router, context normalisation
-├── verify/                 Tier 0 gate
-├── config/                 ~/.rla/config.yaml, keychain
-├── crypto/                 envelope seal/open, key management
-├── transport/              WSS client, reconnect, sync
-└── daemon/                 IPC, lifecycle
+├── acp/          ACP client: stdio + HTTP/SSE transports, session lifecycle
+├── roles/        role → agent binding, per-project configuration
+├── orchestrate/  the run loop: implement → gates → review → evidence
+├── verify/       the gate engine (promoted from scripts/gate)
+├── spec/         spec artifacts, ids, fidelity diff, ratification state
+├── approve/      unified approval queue across agents
+├── crypto/       envelope seal/open, key management
+├── transport/    WSS client to the relay, reconnect, sync
+└── daemon/       IPC, lifecycle, multi-project supervision
 ```
 
-### The agent loop
+### The run loop
 
 ```
-user message
-    ↓
-build context (history + tool schemas)
-    ↓
-┌─→ call provider (streaming) ─────────────────┐
-│       ↓                                      │
-│   tool calls requested?                      │
-│       ├─ no  → stream final answer → done    │
-│       └─ yes ↓                               │
-│   dangerous? ─ yes → request approval        │
-│       │              (blocks until answered) │
-│       ↓ no / approved                        │
-│   execute tools, capture results             │
-│       ↓                                      │
-│   Tier 0 gate on any edits                   │
-│       ↓                                      │
-└── feed results back ─────────────────────────┘
-        (bounded by a step ceiling)
+ratified spec
+     ↓
+┌──────────────────────────────────────────────────┐
+│ CODER agent — implement                          │
+│   permission requests → approval queue → phone   │
+└────────────────────┬─────────────────────────────┘
+                     ▼
+┌──────────────────────────────────────────────────┐
+│ GATES — deterministic, no tokens                 │
+│   format · lint · types · tests · coverage       │
+│   spec fidelity · fake-green                     │
+└────────────────────┬─────────────────────────────┘
+                     ▼
+┌──────────────────────────────────────────────────┐
+│ REVIEWER agent — a DIFFERENT model               │
+│   input: spec + diff + gate findings             │
+│   task: disprove, do not confirm                 │
+└────────────────────┬─────────────────────────────┘
+                     ▼
+              findings?  ── yes ──▶ back to CODER (bounded)
+                     │
+                     no
+                     ▼
+              evidence bundle → ② human confirms
 ```
 
-Three properties this has to hold:
+Three properties this must hold:
 
-- **Bounded.** A step ceiling and a hard stop. An agent that loops forever burns tokens and trust in equal measure.
-- **Interruptible.** Cancellation from the phone stops it at the next step boundary, not eventually.
-- **Loud.** A tool that fails reports failure. It never returns an empty result that reads like success.
+- **Bounded.** An iteration budget and a hard stop. An unbounded loop between two models burns two subscriptions and produces confidence nobody earned.
+- **Interruptible.** Cancel from the phone stops at the next step boundary.
+- **Loud.** An agent that dies, a gate that could not run, a reviewer that returned nothing parseable — all block the verdict. `COULD NOT VERIFY` is never a pass.
 
-### Tools
+### Why the reviewer is prompted to disprove
 
-Each tool is a JSON schema plus a handler. The set is deliberately small.
+Asked *"is this correct?"*, a model tends to agree. Asked *"find where this fails to meet SPEC-x-01"*, it looks. The reviewer receives the spec, the diff and the gate output, and is instructed to produce findings or state explicitly that it found none.
 
-| Tool | Does | Constrained by |
-| :--- | :--- | :--- |
-| `read_file` | Read a file | Working-directory allowlist |
-| `write_file` | Create or overwrite | Allowlist + approval on paths outside the project |
-| `list_files` | Directory listing | Allowlist |
-| `search` | Content search | Allowlist |
-| `run_command` | Execute, capture output | Allowlist + timeout + danger classification |
+It is a different model, from a different vendor, so it does not share the Coder's training-time blind spots. That is the entire mechanism — and its honest weakness is that two models can still be wrong together. Deterministic gates carry the weight where judgement cannot.
 
-**The allowlist is a security boundary, not a convenience.** Every path is resolved and verified to be inside a configured working directory *after* symlink resolution. Escaping it is a vulnerability — see [`threat-model.md`](threat-model.md#t4--command-execution-escape).
+### Roles
 
-### Model router
-
-Providers are configuration. Adding one is a config entry plus a contract test ([ADR-006](decisions.md#adr-006--provider-neutral-core-first-class-zaiqwenkimi)).
+Configuration, not code paths. Any ACP agent can fill any role.
 
 ```yaml
 # ~/.rla/config.yaml
-providers:
-  zai:
-    base_url: https://api.z.ai/v1
-    models: [glm-4.6]
-  qwen:
-    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-    models: [qwen-2.5-coder]
-  kimi:
-    base_url: https://api.moonshot.cn/v1
-    models: [moonshot-v1-128k]
-
-active: zai/glm-4.6
-
-workspace:
-  allow: ["~/code/myproject"]
+projects:
+  myapp:
+    path: ~/code/myapp
+    roles:
+      coder:    { agent: qwen-code }
+      reviewer: { agent: kimi-code }
+      explorer: { agent: opencode, model: glm-5.2 }   # optional
+    iteration_budget: 8
 ```
 
-**Hot-swapping** is the differentiator, and the hard part is not the switch — it is the history. Providers disagree on how tool calls and tool results are represented, so switching mid-conversation means translating the whole transcript into the target's shape. Where the target cannot represent something (parallel tool calls, for instance), it is flattened into a form that preserves meaning.
+Credentials are absent by design: each agent already holds its own.
 
-Context overflow when moving to a smaller window is handled by summarising older turns with a cheap model before the handoff, never by silently truncating.
+### Approval queue
 
-### Tier 0
+Every agent's `session/request_permission` lands in one queue. One decision each, bound to device id, command hash and a nonce; expiry fails closed ([`protocol.md`](protocol.md#approvalrequest--approvalrespond)).
 
-After every edit: format, lint, type-check or compile. Deterministic, no token cost, sub-second. Failures go back into the loop as tool results, so the agent fixes its own mess before continuing.
+This is what makes several agents supervisable from a phone: without a single queue, three agents mean three places to look.
 
-This is the whole of Loop Engineering that ships in the MVP. Tiers 1–4 depend on LLM judgement and are in [X6](vision-roadmap.md#x6--loop-engineering-tiers-14).
+### Gates
+
+Deterministic, sub-second where possible, no tokens. Promoted from [`scripts/gate`](../scripts/gate) — the same engine this repository is built with ([ADR-011](decisions.md#adr-011--the-project-is-built-with-its-own-loop)).
+
+| Tier | Runs | Checks |
+| :--- | :--- | :--- |
+| 0 | every edit | format, types, compile |
+| 1 | every iteration | lint, changed-file tests, conformance, fake-green |
+| 2 | at convergence | full tests, coverage ratchet, **spec fidelity** |
+| 3 | candidate-complete | race, CVE scan, ➕ mutation and fuzzing |
+
+Two properties make a green worth something: **canaries** (each gate is fed planted breakage and must catch it) and **immutability** (gate definitions are compiled, not configuration — weakening one is a reviewable code change).
+
+Full method: [`loop-engineering.md`](loop-engineering.md).
 
 ---
 
-## Relay server
+## ACP integration
 
-Untrusted infrastructure by design. Assume it is hostile and the guarantees still hold.
+**Transport.** JSON-RPC 2.0 over stdio is the baseline; the orchestrator spawns the agent as a subprocess. Where an agent offers HTTP+SSE — `qwen serve` does — that transport is preferred: it survives orchestrator restarts and supports `Last-Event-ID` replay.
+
+**What we use.** Session create/resume/cancel, streamed session updates, tool-call and diff events, and `session/request_permission`.
+
+**What we never do.** Alter or spoof client identity. Agents identify as themselves; that honesty is what keeps the delegated path legitimate.
+
+**Version tolerance.** Capability negotiation at session start; unknown message types are ignored rather than treated as errors. Tested agent versions are recorded in [`protocol.md`](protocol.md#acp-capability-matrix).
+
+### Agent installation
+
+`rla setup` detects installed agents and installs missing ones **through their own official installers** — `npm install -g …` and equivalents. We orchestrate, never redistribute: that keeps third-party licensing and binary supply-chain surface out of this project entirely.
+
+---
+
+## Relay
+
+Untrusted infrastructure by design. Assume it is hostile and every guarantee still holds.
 
 ```
 cmd/rla-server/
 internal/
 ├── server/    WSS gateway, session routing
-├── pairing/   token issue/verify, key exchange
+├── pairing/   token issue/verify, public-key exchange
 ├── stream/    JetStream publish/replay
 ├── push/      APNs + FCM
 ├── db/        SQLite, migrations
 └── metrics/   observability
 ```
 
-**What it does:** authenticates devices, routes sealed envelopes, persists them in JetStream so an offline phone can catch up, and sends content-free push notifications.
+**What it does:** authenticates devices, routes sealed envelopes, persists them so an offline phone can catch up, sends content-free push notifications.
 
-**What it cannot do:** read payloads, reach an AI provider, or see an API key. Tests assert all three.
+**What it cannot do:** read payloads, reach a model provider, see a credential. Tests assert all three.
 
-### Sessions and streams
+### Sessions, streams, retention
 
-One JetStream stream per session. Every event carries a monotonic sequence number; the client acknowledges its `lastSeq` and replays from there on reconnect. That is the whole of the zero-loss guarantee.
+One JetStream stream per session; monotonic sequence numbers; the client acknowledges `lastSeq` and replays from there. That is the whole zero-loss guarantee.
 
-Streaming token deltas are a special case: persisting each one would bloat the stream for no benefit, since nobody replays a half-finished sentence. Deltas go out on an ephemeral subject; only the completed message is persisted.
+Streaming deltas go out on an ephemeral subject — nobody replays a half-finished sentence. Only completed messages persist.
 
-### Retention
-
-Retention is a policy decision with a disk-space consequence, so it is explicit rather than implied by a plan tier:
-
-| Deployment | Age limit | Size limit |
+| Deployment | Age | Size |
 | :--- | :--- | :--- |
-| Self-hosted (default) | 7 days | 1 GB per stream, 4 GB total |
-| Managed Free | 24 hours | 100 MB per session |
-| Managed Pro | 7 days | 1 GB per session |
-| Managed Team | 30 days | 10 GB per account |
+| Self-hosted (default) | 7 days | 1 GB/stream, 4 GB total |
+| Managed Free | 24 hours | 100 MB/session |
+| Managed Pro | 7 days | 1 GB/session |
+| Managed Team | 30 days | 10 GB/account |
 
-Self-hosted limits are configurable. When a stream hits its ceiling the oldest events are discarded and the client is told there is a gap, rather than being handed a silently incomplete history.
+When a stream hits its ceiling the oldest events are discarded and the client is told there is a **gap** — never handed a silently incomplete history.
 
 ### Observability
 
-Not deferred — a relay nobody is watching fails silently, and the first report comes from a user. From P2: structured JSON logs (no payloads, no tokens), `/metrics` (connections, stream lag, error rate, push failures, replay gaps), `/healthz`, `/readyz`.
+From P2: structured JSON logs (no payloads, no tokens), `/metrics` (connections, stream lag, error rate, push failures, replay gaps), `/healthz`, `/readyz`. A relay nobody watches fails silently and the first report comes from a user.
 
 ---
 
-## Mobile application
+## Mobile client
 
 ```
 mobile/lib/
-├── main.dart
 ├── app/            router, theme, l10n (TR + EN)
-├── core/           network (WSS), crypto, storage, errors, connectivity
+├── core/           network, crypto, storage, errors, connectivity
 ├── features/
 │   ├── pairing/
-│   ├── chat/
-│   ├── models/     switcher
-│   └── approvals/
-└── shared/         reusable widgets
+│   ├── specs/      ① ratification
+│   ├── evidence/   ② review — the screen the product exists for
+│   ├── approvals/
+│   └── runs/       live status, roles, cancel
+└── shared/
 ```
 
-Riverpod for state, `go_router` for routing, `drift` for the offline cache, Material 3 in light and dark.
+Riverpod, `go_router`, `drift`, Material 3 light and dark.
 
-Apache-2.0, unlike the rest of the repository — see [ADR-002](decisions.md#adr-002--split-licensing-agpl-core-apache-20-mobile). Nothing copyleft may enter this directory, and wire types are reimplemented here rather than shared, which keeps the boundary unambiguous.
+Apache-2.0, unlike the rest of the repository ([ADR-002](decisions.md#adr-002--split-licensing-agpl-core-apache-20-mobile)). Nothing copyleft enters this directory, and wire types are reimplemented rather than shared — duplication here is deliberate and keeps the licence boundary unambiguous.
 
 ---
 
 ## CLI host availability
 
-**The daemon must be running for anything to work.** There is no cloud fallback; that is the direct consequence of BYOK and a local agent ([ADR-009](decisions.md#adr-009--the-cli-host-must-be-reachable)).
+**The orchestrator must be running.** There is no cloud fallback; agents execute on the user's machine against the user's repository ([ADR-009](decisions.md#adr-009--the-cli-host-must-be-reachable)).
 
-When the host is unreachable the app shows the last known state and says so plainly, with the time of last contact. Queued messages are held and delivered on reconnect. What it never does is spin indefinitely.
+When the host is unreachable the app shows the last known state with a timestamp and says so plainly. Queued instructions are held and delivered on reconnect. It never spins indefinitely.
 
 ### Headless deployment
 
-For always-on availability, run the daemon somewhere that is always on:
-
 ```bash
-# systemd — a small VPS, home server, or always-on desktop
 sudo tee /etc/systemd/system/rla.service <<'EOF'
 [Unit]
-Description=RemLinkAgent daemon
+Description=RemLinkAgent orchestrator
 After=network-online.target
 
 [Service]
@@ -229,9 +253,11 @@ EOF
 sudo systemctl enable --now rla
 ```
 
-The trade-off is real and worth stating: a machine reachable at all times is a machine that can be attacked at all times. Keep the working-directory allowlist tight and the approval flow on.
+The trade-off is real: a machine reachable at all times is attackable at all times. Keep the working-directory allowlist tight and approvals on.
 
-Wake-on-LAN for sleeping hosts is a plausible convenience, not a commitment.
+### Multiple projects
+
+One daemon supervises several projects, each with its own agent set and role bindings. The phone addresses them individually; status is per-project. This is a first-class case, not an extension — running several projects at once is the situation that motivated the product.
 
 ---
 
@@ -239,14 +265,15 @@ Wake-on-LAN for sleeping hosts is a plausible convenience, not a commitment.
 
 | Where | What | Protection |
 | :--- | :--- | :--- |
-| CLI host — OS keychain | AI API keys, device keys | OS-level encryption |
-| CLI host — `~/.rla/` | Config, session state | Filesystem permissions |
+| Agent processes | Their own API keys / subscription tokens | Their own storage; never ours |
+| Orchestrator — `~/.rla/` | Config, role bindings, specs, gate cache | Filesystem permissions |
+| Orchestrator — OS keychain | Device keys; PAYG keys **only if** the direct path is used | OS-level encryption |
 | Relay — SQLite | Devices, sessions, push tokens | No payloads, ever |
-| Relay — JetStream | Sealed event payloads | E2E encrypted; time and size limited |
+| Relay — JetStream | Sealed payloads | E2E encrypted; time and size limited |
 | Mobile — secure storage | Device token, session keys | Keychain / Keystore |
-| Mobile — drift | Decrypted message cache | App sandbox |
+| Mobile — drift | Decrypted cache | App sandbox |
 
-Full inventory of what the relay operator can observe: [`privacy.md`](privacy.md).
+Complete inventory of what a relay operator can observe: [`privacy.md`](privacy.md).
 
 ---
 
@@ -254,17 +281,15 @@ Full inventory of what the relay operator can observe: [`privacy.md`](privacy.md
 
 ```
 RemLinkAgent/
-├── cmd/rla/                CLI binary                    AGPL
-├── cmd/rla-server/         relay binary                  AGPL
-├── internal/               core packages                 AGPL
-├── mobile/                 Flutter app                   Apache-2.0
-├── deploy/                 compose, Dockerfile, NATS     AGPL
-├── scripts/                tooling (make.ps1)            AGPL
+├── cmd/rla/                orchestrator binary          AGPL
+├── cmd/rla-server/         relay binary                 AGPL
+├── internal/               core packages                AGPL
+├── mobile/                 Flutter client               Apache-2.0
+├── deploy/                 compose, Dockerfile, NATS    AGPL
+├── scripts/                gate engine, tooling         AGPL
+├── .rla/                   this project's own specs, principles, gates
 ├── docs/                   public documentation + Pages
-├── LICENSE                 AGPL-3.0-or-later
-├── mobile/LICENSE          Apache-2.0
-├── LICENSE_HEADER*         header templates
 └── Makefile
 ```
 
-`website/` (M1), `watchos/` and `wearos/` (X3/X4) appear when their phases begin.
+`website/` (M1), `watchos/` and `wearos/` (X3) appear when their phases begin.

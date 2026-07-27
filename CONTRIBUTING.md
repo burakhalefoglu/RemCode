@@ -36,7 +36,7 @@ A signed [**CLA**](CLA.md) is required. [CLA Assistant](https://cla-assistant.io
 | Area | How |
 | :--- | :--- |
 | 🏗️ **P0–P1 implementation** | The critical path. See [`roadmap.md`](docs/roadmap.md) |
-| 🔬 **Provider contract tests** | Verify tool-calling and streaming for a provider — [P0.9](docs/roadmap.md#p0--scaffolding--de-risking) |
+| 🔬 **Provider contract tests** | Verify tool-calling and streaming for a provider — [P0.9](docs/roadmap.md#p0--scaffolding-gates--de-risking) |
 | 🔐 **Threat model review** | Poke holes in [`threat-model.md`](docs/threat-model.md); adversarial reading is genuinely wanted |
 | 🐛 **Bug reports** | [Open an issue](../../issues) |
 | 💡 **Feature ideas** | [Open an issue](../../issues) first — check [`vision-roadmap.md`](docs/vision-roadmap.md), it may already be planned |
@@ -51,7 +51,7 @@ A signed [**CLA**](CLA.md) is required. [CLA Assistant](https://cla-assistant.io
 
 | Tool | Version | Needed for |
 | :--- | :--- | :--- |
-| **Go** | ≥ 1.24 | CLI + server |
+| **Go** | ≥ 1.26.5 | CLI + server |
 | **Docker** + Compose | any recent | NATS/JetStream |
 | **Flutter** | ≥ 3.22 | Mobile app (P3 onward) |
 | **Git** | any | Signed commits appreciated |
@@ -69,7 +69,7 @@ make test lint     # green on the skeleton
 make docker-up     # NATS + server
 ```
 
-The Flutter project does not exist yet — `make mobile` prints the exact `flutter create` command to bootstrap it ([P0.7](docs/roadmap.md#p0--scaffolding--de-risking)).
+The Flutter project does not exist yet — `make mobile` prints the exact `flutter create` command to bootstrap it ([P0.7](docs/roadmap.md#p0--scaffolding-gates--de-risking)).
 
 ---
 
@@ -85,18 +85,28 @@ git checkout -b feat/short-description
 
 `feat/` · `fix/` · `docs/` · `chore/` · `refactor/` · `test/`
 
-**3. Build and check.**
+**3. Run the loop.** This repository is built with the tiered verification it
+will later ship as a feature — see [`docs/development-loop.md`](docs/development-loop.md),
+and read it before your first PR:
 
 ```bash
-make lint            # golangci-lint + flutter analyze
-make test            # all tests
-make license-check   # header enforcement — CI blocks on this
+make t0      # after every edit      — format, compile, vet     (seconds)
+make t1      # every iteration       — lint, tests, conformance (~10s)
+make t2      # at convergence        — coverage, spec fidelity  (~30s)
+make t3      # candidate-complete    — race, CVE scan           (minutes)
+make verify  # before you test by hand
 ```
+
+Three statuses, not two: 🟢 passed, 🔴 failed, and ⚠️ **could not verify** — a
+gate that did not run. The third is not a pass, and it blocks readiness.
+
+Anything beyond a bug fix starts with a spec in `.rla/specs/` that a human
+ratifies before code is written. `make spec` shows what is outstanding.
 
 **4. Commit** using [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```text
-feat(cli): add context normalization for model hot-swap
+feat(acp): hold permission requests across a phone round trip
 fix(server): handle heartbeat loss during WSS reconnect
 docs(protocol): document event envelope versioning
 chore(deps): bump go-openai to v1.40.0
@@ -130,7 +140,9 @@ These are not style preferences — they are the reasons the project exists:
 
 | Invariant | Meaning |
 | :--- | :--- |
-| 🔑 **Zero-Touch AI** | AI traffic and API keys never reach the relay. No exceptions, no debug flags, no "temporary" telemetry. |
+| ⚖️ **Vendor-neutral** | We sell no model and favour none. It is the only reason a verdict of "the Coder got this wrong" means anything. |
+| 🎭 **No impersonation** | Agents identify as themselves. No header, User-Agent or client identifier is ever altered to look like another tool — not to unlock a feature, not for testing. |
+| 🔑 **Zero-Touch AI** | AI traffic and API keys never reach the relay. The orchestrator holds no provider credentials at all: each agent authenticates itself. |
 | 🔐 **E2E encryption** | The relay handles ciphertext. Any change that would let it read plaintext is rejected regardless of what it enables. |
 | 🟢 **Fail-Loud** | Never report success on an error path. Halt visibly. A silent green is worse than a red. |
 | 🪶 **Lightness** | CLI target < 30 MB RSS. Justify new dependencies. |

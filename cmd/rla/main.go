@@ -80,6 +80,9 @@ func main() {
 			}
 			// Fail loud: never let a caller believe an unimplemented command
 			// succeeded. This invariant outlives the skeleton.
+			//
+			// SPEC-build-scaffolding-03: a declared-but-absent command exits
+			// non-zero and names the phase that will implement it.
 			fmt.Fprintf(os.Stderr,
 				"rla %s is not implemented yet (planned for %s).\nRoadmap: https://github.com/burakhalefoglu/RemLinkAgent/blob/main/docs/roadmap.md\n",
 				c.name, c.phase)

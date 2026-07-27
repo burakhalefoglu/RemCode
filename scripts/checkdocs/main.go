@@ -21,6 +21,9 @@
 // whose documentation links all 404'd. Anchors are worse than paths: they rot
 // silently when a heading is reworded, and nothing complains. So CI checks.
 //
+// SPEC-build-scaffolding-07: every relative link and heading anchor in the
+// repository is machine-verified.
+//
 //	go run ./scripts/checkdocs          # whole repo
 //	go run ./scripts/checkdocs docs     # a subtree
 package main
@@ -43,7 +46,7 @@ var (
 
 	// Fenced code blocks are stripped before scanning: a link inside an
 	// example is documentation, not a reference to check.
-	fenceRe = regexp.MustCompile("(?s)```.*?```|(?m)^~~~.*?^~~~")
+	fenceRe = regexp.MustCompile("(?s)```.*?```|~~~.*?~~~")
 
 	// GitHub's anchor slug keeps letters, digits, spaces, hyphens and
 	// underscores; everything else is dropped, then spaces become hyphens.
@@ -83,7 +86,7 @@ func main() {
 	// Index every anchor in the repository first — a link may point anywhere.
 	anchors := map[string]map[string]bool{}
 	for _, f := range files {
-		body, err := os.ReadFile(f)
+		body, err := os.ReadFile(f) //nolint:gosec // f comes from our own directory walk
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "read %s: %v\n", f, err)
 			os.Exit(1)
@@ -124,7 +127,7 @@ func main() {
 
 func collect(root string) ([]string, error) {
 	var out []string
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error { //nolint:gosec // root is a CLI argument under the operator's control
 		if err != nil {
 			return err
 		}
@@ -144,7 +147,7 @@ func collect(root string) ([]string, error) {
 }
 
 func check(file string, anchors map[string]map[string]bool) []problem {
-	raw, err := os.ReadFile(file)
+	raw, err := os.ReadFile(file) //nolint:gosec // file comes from our own directory walk
 	if err != nil {
 		return []problem{{file: file, reason: "unreadable", link: err.Error()}}
 	}

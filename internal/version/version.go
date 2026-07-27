@@ -29,6 +29,9 @@ import (
 
 // Stamped by -ldflags at build time. Unexported so nothing can mutate them at
 // runtime; read through the accessors below.
+//
+// SPEC-build-scaffolding-01: build metadata is stamped at link time, with
+// documented defaults rather than empty strings on an unstamped build.
 var (
 	version = "0.0.0-dev"
 	commit  = "unknown"
@@ -51,6 +54,9 @@ type Info struct {
 }
 
 // Protocol is the wire protocol version implemented by this build.
+//
+// SPEC-build-scaffolding-02: independent of Version, because the CLI, relay
+// and mobile client ship on separate cadences and negotiate on this alone.
 const Protocol = 1
 
 // Get returns the current build metadata.

@@ -62,6 +62,8 @@ func main() {
 func run(addr string, logger *slog.Logger) error {
 	info := version.Get()
 
+	// SPEC-build-scaffolding-04: health and version endpoints exist before the
+	// WebSocket gateway so deployment plumbing can be built and verified.
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -82,6 +84,8 @@ func run(addr string, logger *slog.Logger) error {
 
 	// Signal-driven shutdown, so `docker compose down` and Ctrl-C both drain
 	// cleanly instead of severing connections.
+	//
+	// SPEC-build-scaffolding-05: bounded graceful shutdown on SIGINT/SIGTERM.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -121,6 +125,9 @@ func newLogger(level string) *slog.Logger {
 	var lvl slog.Level
 	// Fail loud on a bad value rather than silently defaulting: a typo in a
 	// deployment config should be visible, not swallowed.
+	//
+	// SPEC-build-scaffolding-06: invalid configuration exits non-zero and
+	// names the accepted values.
 	if err := lvl.UnmarshalText([]byte(level)); err != nil {
 		fmt.Fprintf(os.Stderr, "invalid -log-level %q: want debug|info|warn|error\n", level)
 		os.Exit(2)

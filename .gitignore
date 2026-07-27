@@ -123,3 +123,6 @@ lcov.info
 # NOTE: The AGPL header template LICENSE_HEADER is tracked.
 # Only personal license files (if any) are ignored.
 license-personal.*
+
+# --- Loop Engineering gate cache (.rla/ specs and principles ARE tracked) ---
+/.rla/cache/

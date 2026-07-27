@@ -1,0 +1,564 @@
+// RemLinkAgent — AI coding agent for your machine, driven from your phone
+// Copyright (C) 2026 Burak Halefoğlu
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+//gate:spec-fixtures — SPEC ids below are test data, not citations.
+
+// Tests for the gate itself.
+//
+// A verification tool nobody verifies is the exact fake-green this system
+// exists to catch. `gate canary` proves the gates react to planted breakage;
+// these tests pin the logic underneath them.
+
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func writeFiles(t *testing.T, files map[string]string) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	for name, body := range files {
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			t.Fatalf("mkdir %s: %v", name, err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	return dir
+}
+
+// ── status semantics ────────────────────────────────────────────────────────
+
+func TestUnverifiedIsNotAPass(t *testing.T) {
+	// The whole fail-loud principle rests on this distinction. If Unverified
+	// ever collapses into Pass, a gate that could not run starts reporting
+	// success — which is the failure mode the system is built to prevent.
+	if Unverified == Pass {
+		t.Fatal("Unverified must be distinct from Pass")
+	}
+	if statusExit(Unverified) == exitOK {
+		t.Errorf("statusExit(Unverified) = %d, must not be the success code", statusExit(Unverified))
+	}
+	if got := Unverified.String(); got != "COULD NOT VERIFY" {
+		t.Errorf("Unverified.String() = %q", got)
+	}
+}
+
+func TestWorsenNeverImproves(t *testing.T) {
+	cases := []struct {
+		current, next, want Status
+	}{
+		{Pass, Pass, Pass},
+		{Pass, Unverified, Unverified},
+		{Pass, Fail, Fail},
+		{Unverified, Pass, Unverified},
+		{Unverified, Fail, Fail},
+		{Fail, Pass, Fail},
+		{Fail, Unverified, Fail},
+	}
+	for _, c := range cases {
+		if got := worsen(c.current, c.next); got != c.want {
+			t.Errorf("worsen(%v, %v) = %v, want %v", c.current, c.next, got, c.want)
+		}
+	}
+}
+
+// ── spec parsing ────────────────────────────────────────────────────────────
+
+func TestParseSpecReadsFrontMatterAndRequirements(t *testing.T) {
+	dir := writeFiles(t, map[string]string{
+		".rla/specs/demo.md": `---
+id: demo
+title: Demo feature
+status: ratified
+phase: P9
+---
+
+Prose that mentions nothing.
+
+## SPEC-demo-01 — First requirement
+
+Body.
+
+## SPEC-demo-02 — Second requirement
+`,
+	})
+
+	specs, err := loadSpecs(dir)
+	if err != nil {
+		t.Fatalf("loadSpecs: %v", err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("got %d specs, want 1", len(specs))
+	}
+
+	s := specs[0]
+	if s.ID != "demo" || s.Title != "Demo feature" || s.Phase != "P9" {
+		t.Errorf("front matter mis-parsed: %+v", s)
+	}
+	if !s.Active() || s.Draft() {
+		t.Errorf("status %q should be active and not draft", s.Status)
+	}
+	if len(s.Requirements) != 2 {
+		t.Fatalf("got %d requirements, want 2", len(s.Requirements))
+	}
+	if s.Requirements[0].ID != "SPEC-demo-01" || s.Requirements[0].Title != "First requirement" {
+		t.Errorf("requirement 0 mis-parsed: %+v", s.Requirements[0])
+	}
+}
+
+func TestParseSpecRejectsUnknownStatus(t *testing.T) {
+	dir := writeFiles(t, map[string]string{
+		".rla/specs/bad.md": "---\nid: bad\ntitle: T\nstatus: probably-fine\n---\n\n## SPEC-bad-01 — X\n",
+	})
+
+	if _, err := loadSpecs(dir); err == nil {
+		t.Fatal("expected an error for an unknown status")
+	}
+}
+
+func TestTemplateIsNotTreatedAsASpec(t *testing.T) {
+	dir := writeFiles(t, map[string]string{
+		".rla/specs/_TEMPLATE.md": "---\nid: <slug>\nstatus: draft\n---\n",
+	})
+
+	specs, err := loadSpecs(dir)
+	if err != nil {
+		t.Fatalf("loadSpecs: %v", err)
+	}
+	if len(specs) != 0 {
+		t.Errorf("underscore-prefixed files must be skipped, got %d specs", len(specs))
+	}
+}
+
+func TestDraftRequirementsAreNotEnforced(t *testing.T) {
+	// A draft is a proposal. Holding code to it before a human agrees would
+	// invert checkpoint ① — the plan must be ratified before it binds.
+	dir := writeFiles(t, map[string]string{
+		".rla/specs/draft.md": "---\nid: draft\ntitle: T\nstatus: draft\n---\n\n## SPEC-draft-01 — Not yet agreed\n",
+		".rla/specs/live.md":  "---\nid: live\ntitle: T\nstatus: ratified\n---\n\n## SPEC-live-01 — Agreed\n",
+		"internal/impl/x.go":  "package impl\n\n// SPEC-live-01: done.\n",
+	})
+
+	res := checkSpecFidelity(dir)
+	if res.Status != Pass {
+		t.Errorf("status = %v (%s), want Pass; findings: %v", res.Status, res.Summary, res.Findings)
+	}
+}
+
+func TestUnimplementedRatifiedRequirementFails(t *testing.T) {
+	dir := writeFiles(t, map[string]string{
+		".rla/specs/live.md": "---\nid: live\ntitle: T\nstatus: ratified\n---\n\n## SPEC-live-01 — Never built\n",
+		"internal/impl/x.go": "package impl\n",
+	})
+
+	res := checkSpecFidelity(dir)
+	if res.Status != Fail {
+		t.Fatalf("status = %v, want Fail", res.Status)
+	}
+	if !strings.Contains(strings.Join(res.Findings, "\n"), "SPEC-live-01") {
+		t.Errorf("findings should name the uncovered requirement: %v", res.Findings)
+	}
+}
+
+func TestDanglingCitationFails(t *testing.T) {
+	// Code citing an id no spec declares means either a typo or a requirement
+	// that was deleted while its marker stayed behind. Both are drift.
+	dir := writeFiles(t, map[string]string{
+		".rla/specs/live.md": "---\nid: live\ntitle: T\nstatus: ratified\n---\n\n## SPEC-live-01 — Built\n",
+		"internal/impl/x.go": "package impl\n\n// SPEC-live-01 and SPEC-live-99 are cited here.\n",
+	})
+
+	res := checkSpecFidelity(dir)
+	if res.Status != Fail {
+		t.Fatalf("status = %v, want Fail", res.Status)
+	}
+	if !strings.Contains(strings.Join(res.Findings, "\n"), "SPEC-live-99") {
+		t.Errorf("findings should name the dangling citation: %v", res.Findings)
+	}
+}
+
+func TestSpecHygieneCatchesIDFileNameMismatch(t *testing.T) {
+	dir := writeFiles(t, map[string]string{
+		".rla/specs/actual-name.md": "---\nid: different\ntitle: T\nstatus: ratified\n---\n\n## SPEC-different-01 — X\n",
+	})
+
+	res := checkSpecHygiene(dir)
+	if res.Status != Fail {
+		t.Errorf("status = %v, want Fail for an id/filename mismatch", res.Status)
+	}
+}
+
+func TestSpecHygieneCatchesForeignRequirementID(t *testing.T) {
+	dir := writeFiles(t, map[string]string{
+		".rla/specs/mine.md": "---\nid: mine\ntitle: T\nstatus: ratified\n---\n\n## SPEC-yours-01 — Belongs elsewhere\n",
+	})
+
+	res := checkSpecHygiene(dir)
+	if res.Status != Fail {
+		t.Errorf("status = %v, want Fail for a requirement id from another spec", res.Status)
+	}
+}
+
+// ── conformance checks ──────────────────────────────────────────────────────
+
+func TestZeroTouchAIRejectsProviderImportInRelay(t *testing.T) {
+	dir := writeFiles(t, map[string]string{
+		"internal/server/relay.go": "package server\n\nimport _ \"example.com/x/internal/models\"\n",
+	})
+
+	res := checkZeroTouchAI(dir)
+	if res.Status != Fail {
+		t.Fatalf("status = %v, want Fail — the relay must not reach provider code", res.Status)
+	}
+}
+
+func TestZeroTouchAIRejectsCryptoImportInRelay(t *testing.T) {
+	// ADR-004: the relay holds no key material, ever.
+	dir := writeFiles(t, map[string]string{
+		"internal/server/relay.go": "package server\n\nimport _ \"example.com/x/internal/crypto\"\n",
+	})
+
+	if res := checkZeroTouchAI(dir); res.Status != Fail {
+		t.Errorf("status = %v, want Fail", res.Status)
+	}
+}
+
+func TestZeroTouchAIAllowsProviderImportOutsideRelay(t *testing.T) {
+	// The CLI agent is *supposed* to talk to providers. The rule is about
+	// location, not about the import existing anywhere in the tree.
+	dir := writeFiles(t, map[string]string{
+		"internal/agent/loop.go": "package agent\n\nimport _ \"example.com/x/internal/models\"\n",
+	})
+
+	if res := checkZeroTouchAI(dir); res.Status != Pass {
+		t.Errorf("status = %v, want Pass; findings: %v", res.Status, res.Findings)
+	}
+}
+
+func TestSecretLoggingCatchesCredentialInLogCall(t *testing.T) {
+	dir := writeFiles(t, map[string]string{
+		"x.go": "package x\n\nimport \"log/slog\"\n\nfunc F(apiKey string) { slog.Info(\"hi\", apiKey) }\n",
+	})
+
+	res := checkSecretLogging(dir)
+	if res.Status != Fail {
+		t.Fatalf("status = %v, want Fail", res.Status)
+	}
+}
+
+func TestSecretLoggingAllowsPublicKeyMaterial(t *testing.T) {
+	// Public keys and fingerprints are safe to log, and the pairing flow needs
+	// to. A check that cannot tell them apart would be turned off within a week.
+	dir := writeFiles(t, map[string]string{
+		"x.go": "package x\n\nimport \"log/slog\"\n\nfunc F(publicKey, fingerprint string) { slog.Info(\"paired\", publicKey, fingerprint) }\n",
+	})
+
+	if res := checkSecretLogging(dir); res.Status != Pass {
+		t.Errorf("status = %v, want Pass; findings: %v", res.Status, res.Findings)
+	}
+}
+
+func TestSecretLoggingHonoursOptOut(t *testing.T) {
+	dir := writeFiles(t, map[string]string{
+		"x.go": "//gate:allow-secret-log\n\npackage x\n\nimport \"log/slog\"\n\nfunc F(token string) { slog.Info(\"hi\", token) }\n",
+	})
+
+	if res := checkSecretLogging(dir); res.Status != Pass {
+		t.Errorf("status = %v, want Pass when the file opts out", res.Status)
+	}
+}
+
+func TestFakeGreenCatchesAssertionlessTest(t *testing.T) {
+	dir := writeFiles(t, map[string]string{
+		"x_test.go": "package x\n\nimport \"testing\"\n\nfunc TestHollow(t *testing.T) { _ = 1 }\n",
+	})
+
+	res := checkFakeGreen(dir)
+	if res.Status != Fail {
+		t.Fatalf("status = %v, want Fail", res.Status)
+	}
+	if !strings.Contains(strings.Join(res.Findings, "\n"), "TestHollow") {
+		t.Errorf("findings should name the hollow test: %v", res.Findings)
+	}
+}
+
+func TestFakeGreenAcceptsAssertionInSubtest(t *testing.T) {
+	// Table-driven tests assert inside a closure. Flagging those would make
+	// the check useless against the dominant Go test style.
+	dir := writeFiles(t, map[string]string{
+		"x_test.go": `package x
+
+import "testing"
+
+func TestTable(t *testing.T) {
+	t.Run("case", func(t *testing.T) {
+		if 1 != 1 {
+			t.Errorf("impossible")
+		}
+	})
+}
+`,
+	})
+
+	if res := checkFakeGreen(dir); res.Status != Pass {
+		t.Errorf("status = %v, want Pass; findings: %v", res.Status, res.Findings)
+	}
+}
+
+func TestLicenceBoundaryRejectsAGPLUnderMobile(t *testing.T) {
+	dir := writeFiles(t, map[string]string{
+		"mobile/lib/leak.dart": "// GNU Affero General Public License\nvoid main() {}\n",
+	})
+
+	if res := checkLicenceBoundary(dir); res.Status != Fail {
+		t.Errorf("status = %v, want Fail — ADR-002 makes the boundary one-way", res.Status)
+	}
+}
+
+func TestLicenceBoundaryPassesWithoutMobile(t *testing.T) {
+	if res := checkLicenceBoundary(t.TempDir()); res.Status != Pass {
+		t.Errorf("status = %v, want Pass when mobile/ does not exist", res.Status)
+	}
+}
+
+// ── coverage ratchet ────────────────────────────────────────────────────────
+
+func TestParseTotalCoverage(t *testing.T) {
+	out := "github.com/x/y.go:12:\tF\t100.0%\ntotal:\t\t\t(statements)\t42.7%\n"
+
+	got, ok := parseTotalCoverage(out)
+	if !ok {
+		t.Fatal("failed to parse a well-formed coverage summary")
+	}
+	if got != 42.7 {
+		t.Errorf("got %v, want 42.7", got)
+	}
+}
+
+func TestParseTotalCoverageReportsFailureOnGarbage(t *testing.T) {
+	// Silently returning 0 would let the ratchet read a parse failure as a
+	// catastrophic coverage drop, or worse, as a pass against a zero floor.
+	if _, ok := parseTotalCoverage("no total line here"); ok {
+		t.Error("expected ok=false when there is no total line")
+	}
+}
+
+func TestReadCoverageFloorDefaultsToZero(t *testing.T) {
+	if got := readCoverageFloor(t.TempDir()); got != 0 {
+		t.Errorf("got %v, want 0 when the floor file is absent", got)
+	}
+}
+
+func TestReadCoverageFloor(t *testing.T) {
+	dir := writeFiles(t, map[string]string{coverageFloorFile: "37.5\n"})
+
+	if got := readCoverageFloor(dir); got != 37.5 {
+		t.Errorf("got %v, want 37.5", got)
+	}
+}
+
+// ── cache ───────────────────────────────────────────────────────────────────
+
+func TestSignatureChangesWithContent(t *testing.T) {
+	check := Check{ID: "demo", Inputs: []string{"internal"}}
+
+	dir := writeFiles(t, map[string]string{"internal/x.go": "package x\n"})
+	before, err := signature(dir, check, nil)
+	if err != nil {
+		t.Fatalf("signature: %v", err)
+	}
+
+	if writeErr := os.WriteFile(filepath.Join(dir, "internal", "x.go"), []byte("package x // edited\n"), 0o600); writeErr != nil {
+		t.Fatalf("rewrite: %v", writeErr)
+	}
+	after, err := signature(dir, check, nil)
+	if err != nil {
+		t.Fatalf("signature: %v", err)
+	}
+
+	if before == after {
+		t.Error("signature must change when an input file changes")
+	}
+}
+
+func TestSignatureChangesWithSpecSet(t *testing.T) {
+	check := Check{ID: "demo", Inputs: []string{"internal"}}
+	dir := writeFiles(t, map[string]string{"internal/x.go": "package x\n"})
+
+	a, _ := signature(dir, check, []string{"SPEC-a-01"})
+	b, _ := signature(dir, check, []string{"SPEC-a-01", "SPEC-a-02"})
+
+	if a == b {
+		t.Error("signature must change when the ratified requirement set changes")
+	}
+}
+
+func TestSignatureIsOrderIndependentForSpecs(t *testing.T) {
+	check := Check{ID: "demo", Inputs: []string{"internal"}}
+	dir := writeFiles(t, map[string]string{"internal/x.go": "package x\n"})
+
+	a, _ := signature(dir, check, []string{"SPEC-a-01", "SPEC-a-02"})
+	b, _ := signature(dir, check, []string{"SPEC-a-02", "SPEC-a-01"})
+
+	if a != b {
+		t.Error("spec ordering must not affect the signature")
+	}
+}
+
+func TestEmptyInputsOptOutOfCaching(t *testing.T) {
+	sig, err := signature(t.TempDir(), Check{ID: "demo"}, nil)
+	if err != nil {
+		t.Fatalf("signature: %v", err)
+	}
+	if sig != "" {
+		t.Errorf("got %q, want an empty signature so the gate is never cached", sig)
+	}
+}
+
+func TestCacheOnlyMatchesItsOwnSignature(t *testing.T) {
+	dir := t.TempDir()
+	c := loadCache(dir)
+
+	c.store("demo", "sig-a", "all good")
+
+	if _, ok := c.hit("demo", "sig-b"); ok {
+		t.Error("a stale signature must not hit")
+	}
+	summary, ok := c.hit("demo", "sig-a")
+	if !ok || summary != "all good" {
+		t.Errorf("hit = (%q, %v), want (\"all good\", true)", summary, ok)
+	}
+}
+
+func TestCacheRoundTripsThroughDisk(t *testing.T) {
+	dir := t.TempDir()
+
+	first := loadCache(dir)
+	first.store("demo", "sig", "summary")
+	if err := first.save(); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	if _, ok := loadCache(dir).hit("demo", "sig"); !ok {
+		t.Error("a saved entry should be readable by a fresh cache")
+	}
+}
+
+func TestCorruptCacheIsTreatedAsEmpty(t *testing.T) {
+	// A corrupt cache read as "everything passed" would be the worst possible
+	// failure mode for a tool whose job is proving things.
+	dir := writeFiles(t, map[string]string{cachePath: "{not json"})
+
+	if _, ok := loadCache(dir).hit("demo", "sig"); ok {
+		t.Error("a corrupt cache must never report a hit")
+	}
+}
+
+// ── registry integrity ──────────────────────────────────────────────────────
+
+func TestEveryCheckIsWellFormed(t *testing.T) {
+	seen := map[string]bool{}
+	for _, c := range registry() {
+		switch {
+		case c.ID == "":
+			t.Error("a check has no id")
+		case seen[c.ID]:
+			t.Errorf("duplicate check id %q", c.ID)
+		case c.Run == nil:
+			t.Errorf("%s has no Run function", c.ID)
+		case c.Tier < 0 || c.Tier > 4:
+			t.Errorf("%s has tier %d, outside 0–4", c.ID, c.Tier)
+		}
+		seen[c.ID] = true
+	}
+	if len(seen) == 0 {
+		t.Fatal("the registry is empty")
+	}
+}
+
+// ── argument parsing ────────────────────────────────────────────────────────
+
+func TestSplitCommandAcceptsFlagsOnEitherSide(t *testing.T) {
+	// `gate verify -no-cache` reads naturally and was silently dropping the
+	// flag before this existed. A flag that is ignored rather than rejected
+	// makes the cache look broken instead of the parser.
+	cases := []struct {
+		name     string
+		argv     []string
+		wantCmd  string
+		wantRest []string
+	}{
+		{"flag after", []string{"verify", "-no-cache"}, "verify", []string{"-no-cache"}},
+		{"flag before", []string{"-no-cache", "verify"}, "verify", []string{"-no-cache"}},
+		{"flags both sides", []string{"-v", "t2", "-no-cache"}, "t2", []string{"-v", "-no-cache"}},
+		{"no flags", []string{"canary"}, "canary", nil},
+		{"nothing", nil, "", nil},
+		{"flags only", []string{"-v"}, "", []string{"-v"}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cmd, rest := splitCommand(c.argv)
+			if cmd != c.wantCmd {
+				t.Errorf("cmd = %q, want %q", cmd, c.wantCmd)
+			}
+			if strings.Join(rest, " ") != strings.Join(c.wantRest, " ") {
+				t.Errorf("rest = %v, want %v", rest, c.wantRest)
+			}
+		})
+	}
+}
+
+func TestTierNameCoversEveryTier(t *testing.T) {
+	for tier := 0; tier <= 4; tier++ {
+		if tierName(tier) == "" {
+			t.Errorf("tier %d has no name", tier)
+		}
+	}
+}
+
+func TestJudgementGatesAreDeclared(t *testing.T) {
+	// These are the obligations no script can discharge. An empty list would
+	// mean `gate verify` silently claims full coverage it does not have.
+	if len(judgementGates) == 0 {
+		t.Fatal("judgementGates is empty — verify would imply nothing is owed")
+	}
+	for _, g := range judgementGates {
+		if !strings.Contains(g, "Tier") && !strings.Contains(g, "human") {
+			t.Errorf("%q should say which tier owns it, or that a human does", g)
+		}
+	}
+}
+
+func TestTierZeroStaysCheap(t *testing.T) {
+	// Tier 0 runs after every edit. If something slow lands in it, the loop
+	// stops running it, and the fastest feedback in the system disappears.
+	allowed := map[string]bool{"gofmt": true, "build": true, "vet": true}
+
+	for _, c := range checksForTier(0) {
+		if !allowed[c.ID] {
+			t.Errorf("%q was added to tier 0 — confirm it is sub-second, then update this test", c.ID)
+		}
+	}
+}
