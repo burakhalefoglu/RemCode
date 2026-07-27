@@ -18,7 +18,7 @@ jobs:
     name: analyze & test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # mobile/ is bootstrapped in P0.7. Until then this job reports skipped
       # rather than failing — but it must never report success by omission,
