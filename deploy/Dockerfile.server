@@ -45,7 +45,7 @@ RUN CGO_ENABLED=0 go build \
 # ── runtime ──────────────────────────────────────────────────────────────────
 # Alpine rather than scratch: busybox wget backs the container healthcheck, and
 # ca-certificates are needed for APNs/FCM once push lands in P2.
-FROM alpine:3.20
+FROM alpine:3.24
 
 RUN apk add --no-cache ca-certificates tzdata \
     && adduser -D -H -u 10001 rla \
