@@ -1,0 +1,76 @@
+name: license-check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: license-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  headers:
+    name: licence headers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.5"
+          cache: true
+
+      - name: Install addlicense
+        run: go install github.com/google/addlicense@latest
+
+      # Delegates to the Makefile so the licence boundary is defined once.
+      # AGPL for cmd/ internal/ deploy/ scripts/, Apache-2.0 for mobile/.
+      - name: Check headers
+        run: make license-check
+
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Files are missing their licence header."
+          echo "Run 'make license-add' (or '.\\scripts\\make.ps1 license-add' on Windows) and commit."
+          echo "Which header applies where: docs/license-header.md"
+
+  boundary:
+    name: licence boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ADR-002: Apache-2.0 flows into the AGPL core, never the reverse.
+      # An AGPL header inside mobile/ means code crossed the wrong way.
+      - name: Reject AGPL headers inside mobile/
+        run: |
+          if [ ! -d mobile ]; then
+            echo "mobile/ not present yet — nothing to check"
+            exit 0
+          fi
+          offenders="$(grep -rl 'GNU Affero General Public License' mobile/ \
+            --include='*.dart' --include='*.kt' --include='*.swift' \
+            --include='*.yaml' --include='*.gradle' 2>/dev/null || true)"
+          if [ -n "$offenders" ]; then
+            echo "::error::AGPL-licensed code found under mobile/, which is Apache-2.0 (ADR-002):"
+            echo "$offenders"
+            exit 1
+          fi
+          echo "licence boundary intact"
+
+      - name: Verify licence files exist
+        run: |
+          missing=0
+          for f in LICENSE mobile/LICENSE LICENSE_HEADER LICENSE_HEADER_APACHE; do
+            if [ ! -f "$f" ]; then
+              echo "::error::missing $f"
+              missing=1
+            fi
+          done
+          exit $missing

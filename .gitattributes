@@ -1,0 +1,35 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Files that MUST be LF regardless of platform — CRLF breaks them.
+Makefile        text eol=lf
+*.sh            text eol=lf
+*.conf          text eol=lf
+Dockerfile*     text eol=lf
+LICENSE_HEADER* text eol=lf
+
+# PowerShell is happier with CRLF on Windows and tolerates it elsewhere.
+*.ps1           text eol=crlf
+
+# Go tooling assumes LF.
+*.go            text eol=lf
+go.mod          text eol=lf
+go.sum          text eol=lf
+
+# Binary — never normalise.
+*.png    binary
+*.jpg    binary
+*.ico    binary
+*.ttf    binary
+*.otf    binary
+*.woff   binary
+*.woff2  binary
+*.keystore binary
+*.jks    binary
+
+# Keep generated and platform-scaffold code out of diffs and language stats.
+mobile/ios/**     linguist-vendored
+mobile/android/** linguist-vendored
+*.g.dart          linguist-generated
+*.freezed.dart    linguist-generated
+docs/index.html   linguist-documentation

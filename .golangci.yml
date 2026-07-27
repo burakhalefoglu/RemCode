@@ -1,0 +1,78 @@
+# golangci-lint v2 configuration
+# Install: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - contextcheck # context propagation matters once the relay is real
+    - copyloopvar
+    - durationcheck
+    - errorlint # enforces %w wrapping / errors.Is
+    - gocritic
+    - gosec
+    - misspell
+    - nilerr # returning nil after a non-nil error — a Fail-Loud violation
+    - noctx
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - unconvert
+    - unparam
+    - wastedassign
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+
+    gocritic:
+      enabled-tags: [diagnostic, style, performance]
+      disabled-checks:
+        - hugeParam # premature for a codebase this size
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+
+    revive:
+      rules:
+        - name: exported
+          arguments: [checkPrivateReceivers]
+        - name: error-strings
+        - name: context-as-argument
+        - name: indent-error-flow
+
+    gosec:
+      excludes:
+        - G104 # duplicates errcheck
+
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - std-error-handling
+    rules:
+      # Test files may take shortcuts production code may not.
+      - path: _test\.go
+        linters: [gosec, unparam, errcheck]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/burakhalefoglu/RemLinkAgent
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

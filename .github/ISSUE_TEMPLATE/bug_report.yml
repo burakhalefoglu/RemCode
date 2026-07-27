@@ -1,0 +1,85 @@
+name: 🐛 Bug report
+description: Something behaves differently from how it is documented
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never paste an API key, pairing token or device token into an issue.**
+        Redact before posting. If you already have — rotate the key first, then report.
+
+        Found a security vulnerability? Do not use this form. See [SECURITY.md](https://github.com/burakhalefoglu/RemLinkAgent/blob/main/SECURITY.md).
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened
+      description: One or two sentences. What did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. rla connect
+        2. Scan the QR code
+        3. …
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - CLI agent (rla)
+        - Relay server (rla-server)
+        - Mobile app
+        - Docs
+        - Build / CI
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `rla version`, or the app version.
+      placeholder: "0.1.0 (abc1234)"
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: "macOS 15.2 arm64 / iOS 18.3"
+    validations:
+      required: true
+
+  - type: input
+    id: provider
+    attributes:
+      label: AI provider and model
+      description: Only if relevant to the bug.
+      placeholder: "Z.AI glm-4.6"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Redact secrets. Rendered as a code block automatically.
+      render: shell
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues.
+          required: true
+        - label: This report contains no API keys, tokens or personal data.
+          required: true

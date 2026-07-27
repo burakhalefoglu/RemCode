@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: 🔐 Security vulnerability
+    url: https://github.com/burakhalefoglu/RemLinkAgent/security/advisories/new
+    about: Report privately. Never open a public issue for a security problem.
+
+  - name: 💬 Question or idea
+    url: https://github.com/burakhalefoglu/RemLinkAgent/discussions
+    about: Open-ended questions and discussion belong here.
+
+  - name: 🗺️ Roadmap
+    url: https://github.com/burakhalefoglu/RemLinkAgent/blob/main/docs/roadmap.md
+    about: Check what is planned before filing a feature request.

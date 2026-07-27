@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentic Project Management · Mobil kontrol yüzeyi v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --tq:#14b8c4; --tq-bg:rgba(20,184,196,.12);
+  --alarm:#e2504a; --alarm-bg:rgba(226,80,74,.13);
+  --warn:#d8912a; --warn-bg:rgba(216,145,42,.14);
+  --ok:#3f9d6b; --ok-bg:rgba(63,157,107,.13);
+  --mod:#8b7ae0; --mod-bg:rgba(139,122,224,.14);
+}
+[data-theme="dark"]{
+  --canvas:#111315; --rail:#191c1f;
+  --scr:#1c2023; --scr-2:#232830; --scr-3:#2a3038;
+  --ink:#eef1f3; --ink-2:#9aa4ad; --ink-3:#6a747d;
+  --line:rgba(255,255,255,.10); --line-2:rgba(255,255,255,.18);
+  --frame:#000;
+}
+[data-theme="light"]{
+  --canvas:#e8eaec; --rail:#f4f5f6;
+  --scr:#ffffff; --scr-2:#f5f7f8; --scr-3:#eceff1;
+  --ink:#16191c; --ink-2:#5b656d; --ink-3:#8d959b;
+  --line:rgba(0,0,0,.10); --line-2:rgba(0,0,0,.18);
+  --frame:#c3c8cc;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--canvas);color:var(--ink);font-family:"Plus Jakarta Sans",system-ui,sans-serif;font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+
+.top{position:sticky;top:0;z-index:10;background:var(--rail);border-bottom:1px solid var(--line);padding:14px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:12px}
+.brand b{font-weight:600;font-size:16px;letter-spacing:-.01em}
+.brand span{color:var(--ink-2);font-size:12px}
+.nav{display:flex;gap:4px;flex-wrap:wrap}
+.nav a{color:var(--ink-2);text-decoration:none;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid transparent}
+.nav a:hover,.nav a:focus-visible{color:var(--ink);border-color:var(--line-2);outline:none}
+.tog{background:none;border:1px solid var(--line-2);color:var(--ink-2);border-radius:8px;padding:5px 12px;font:inherit;font-size:12px;cursor:pointer}
+.tog:hover{color:var(--ink)}
+
+.wrap{max-width:1220px;margin:0 auto;padding:34px 22px 90px}
+.sec{margin-bottom:52px;scroll-margin-top:72px}
+.sec-h{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+.sec-n{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--tq);letter-spacing:.08em}
+.sec-h h2{font-size:19px;font-weight:600;letter-spacing:-.015em}
+.sec p.lede{color:var(--ink-2);font-size:13px;max-width:66ch;margin-bottom:20px}
+
+.hier{display:flex;gap:0;align-items:stretch;margin:0 0 26px;border:1px solid var(--line);border-radius:12px;overflow:hidden;flex-wrap:wrap}
+.hier div{flex:1;min-width:150px;padding:13px 15px;border-right:1px solid var(--line)}
+.hier div:last-child{border-right:none}
+.hier .lv{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.06em;margin-bottom:5px}
+.hier .nm{font-size:14px;font-weight:600;letter-spacing:-.01em}
+.hier .ds{font-size:11.5px;color:var(--ink-2);margin-top:3px;line-height:1.45}
+
+.row{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start}
+.unit{width:302px}
+.cap{font-size:11px;color:var(--ink-3);margin-bottom:8px;font-family:"JetBrains Mono",monospace;letter-spacing:.03em}
+
+.phone{background:var(--scr);border:8px solid var(--frame);border-radius:34px;overflow:hidden;display:flex;flex-direction:column;min-height:600px;box-shadow:0 0 0 1px var(--line)}
+.sb{display:flex;align-items:center;justify-content:space-between;padding:9px 18px 5px;font-size:11px;font-weight:500}
+.sb .dots{color:var(--ink-2);letter-spacing:2px}
+.ab{padding:11px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.ab h3{font-size:16px;font-weight:600;letter-spacing:-.01em}
+.ab .sub{font-size:11px;color:var(--ink-2);margin-top:2px}
+.body{flex:1;overflow:hidden}
+.pad{padding:12px 16px}
+.rowline{padding:12px 16px;border-bottom:1px solid var(--line)}
+.grp{padding:13px 16px 5px;font-size:10px;color:var(--ink-3);letter-spacing:.06em;font-family:"JetBrains Mono",monospace}
+
+.tabs{border-top:1px solid var(--line);display:flex;padding-bottom:7px}
+.tab{flex:1;text-align:center;padding:9px 0 3px;color:var(--ink-3)}
+.tab.on{color:var(--tq)}
+.tab .ic{font-size:17px;line-height:1}
+.tab .lb{font-size:10px;margin-top:3px}
+
+.cmd{padding:9px 12px;border-top:1px solid var(--line)}
+.cmd .box{border:1px solid var(--line-2);border-radius:20px;padding:9px 14px;font-size:12px;color:var(--ink-3);display:flex;align-items:center;justify-content:space-between;gap:8px}
+
+.pill{display:inline-block;font-size:10px;padding:2px 9px;border-radius:10px;font-weight:500;font-family:"JetBrains Mono",monospace}
+.p-alarm{background:var(--alarm-bg);color:var(--alarm)}
+.p-warn{background:var(--warn-bg);color:var(--warn)}
+.p-ok{background:var(--ok-bg);color:var(--ok)}
+.p-tq{background:var(--tq-bg);color:var(--tq)}
+.p-mod{background:var(--mod-bg);color:var(--mod)}
+.p-mute{background:var(--scr-3);color:var(--ink-2)}
+
+.item{padding:13px 16px;border-bottom:1px solid var(--line);border-left:3px solid transparent}
+.item.mod{border-left-color:var(--mod)}
+.item.alarm{border-left-color:var(--alarm)}
+.item.warn{border-left-color:var(--warn)}
+.item.mute{border-left-color:var(--line-2)}
+.item.ok{border-left-color:var(--ok)}
+.item .hd{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px}
+.item .ttl{font-size:14px;font-weight:600;letter-spacing:-.01em}
+.item .mt{font-size:12px;color:var(--ink-2);margin-top:3px;line-height:1.45}
+.tiny{font-size:11px;color:var(--ink-3);font-family:"JetBrains Mono",monospace}
+
+.crit{display:flex;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line);align-items:flex-start}
+.crit .mark{font-size:13px;line-height:1.4;flex:none;width:15px}
+.crit .txt{font-size:12.5px;line-height:1.45;flex:1}
+.crit .who{font-size:10px;color:var(--ink-3);font-family:"JetBrains Mono",monospace;margin-top:3px}
+
+.mgate{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);gap:10px}
+.mgate .l{font-size:12.5px}
+.mgate .l b{font-family:"JetBrains Mono",monospace;font-size:11px;font-weight:500;color:var(--mod);margin-right:7px}
+
+.ladder{display:flex;gap:3px;margin-top:8px}
+.ladder i{flex:1;height:5px;border-radius:2px;background:var(--scr-3)}
+.ladder i.ok{background:var(--ok)}
+.ladder i.run{background:var(--warn)}
+.ladder i.bad{background:var(--alarm)}
+.ladder-lb{display:flex;gap:3px;margin-top:4px}
+.ladder-lb span{flex:1;font-size:9px;color:var(--ink-3);font-family:"JetBrains Mono",monospace;text-align:center}
+
+.kv{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line);font-size:13px}
+.kv .v{font-size:12px;color:var(--ink-2);white-space:nowrap}
+.chev{color:var(--ink-3);font-size:13px}
+
+.sw{width:36px;height:20px;border-radius:10px;background:var(--scr-3);border:1px solid var(--line-2);position:relative;flex:none}
+.sw::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--ink-3)}
+.sw.on{background:var(--tq-bg);border-color:var(--tq)}
+.sw.on::after{left:auto;right:2px;background:var(--tq)}
+
+.btn{border:1px solid var(--line-2);background:none;color:var(--ink);border-radius:10px;padding:10px 14px;font:inherit;font-size:13px;font-weight:500;cursor:pointer;flex:1}
+.btn:hover{border-color:var(--ink-3)}
+.btn.pri{border-color:var(--tq);color:var(--tq);background:var(--tq-bg)}
+.btn.mod{border-color:var(--mod);color:var(--mod);background:var(--mod-bg)}
+.acts{display:flex;gap:9px;padding:11px 16px;border-top:1px solid var(--line)}
+
+.note{padding:12px 16px;border-bottom:1px solid var(--line)}
+.note.a{background:var(--alarm-bg)}
+.note.m{background:var(--mod-bg)}
+.note .lb{font-size:10px;font-family:"JetBrains Mono",monospace;margin-bottom:5px}
+.note.a .lb{color:var(--alarm)}
+.note.m .lb{color:var(--mod)}
+.note .tx{font-size:13px;color:var(--ink);line-height:1.45;font-weight:500}
+
+.opt{padding:12px 16px;border-bottom:1px solid var(--line)}
+.opt .t{font-size:13px;font-weight:600}
+.opt .c{font-size:11px;color:var(--ink-2);margin-top:2px;font-family:"JetBrains Mono",monospace}
+
+.stream{padding:12px 16px;font-family:"JetBrains Mono",monospace;font-size:10.5px;line-height:1.75;color:var(--ink-2)}
+.stream .ts{color:var(--ink-3)}
+.stream .ag{color:var(--tq)}
+.stream .obj{color:var(--alarm)}
+.stream p{margin-bottom:9px}
+
+.bub{max-width:88%;border-radius:14px;padding:10px 13px;font-size:13px;line-height:1.45;background:var(--scr-2);margin-left:auto}
+
+.card{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:10px}
+.card .h{padding:11px 13px;border-bottom:1px solid var(--line)}
+.card .l{padding:11px 13px;font-size:12px;line-height:1.9;border-bottom:1px solid var(--line)}
+.card .f{display:flex;gap:8px;padding:10px 13px}
+
+.slot{padding:12px 16px;border-bottom:1px solid var(--line)}
+.slot .top-l{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.slot .role{font-size:10px;font-family:"JetBrains Mono",monospace;color:var(--ink-3);letter-spacing:.05em}
+.slot .mdl{font-size:14px;font-weight:600;margin-top:3px;letter-spacing:-.01em}
+.slot .meta{font-size:11px;color:var(--ink-2);margin-top:3px;font-family:"JetBrains Mono",monospace}
+
+.rule{margin:12px 16px;padding:11px 13px;border:1px dashed var(--line-2);border-radius:10px;font-size:11.5px;color:var(--ink-2);line-height:1.5}
+.rule b{color:var(--ink);font-weight:600}
+
+.lock{flex:1;display:flex;flex-direction:column;justify-content:center;padding:20px 16px}
+.lock .clock{text-align:center;margin-bottom:28px}
+.lock .clock .t{font-size:52px;font-weight:400;letter-spacing:-.03em;line-height:1}
+.lock .clock .d{font-size:12px;color:var(--ink-2);margin-top:5px}
+.lock .push{background:var(--scr-2);border:1px solid var(--line);border-radius:16px;padding:12px 14px}
+
+.legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
+.legend div{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ink-2);font-family:"JetBrains Mono",monospace}
+.legend i{width:16px;height:5px;border-radius:2px;display:inline-block}
+
+footer{border-top:1px solid var(--line);padding:22px;text-align:center;color:var(--ink-3);font-size:11px;font-family:"JetBrains Mono",monospace}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand"><b>Agentic Project Management</b><span>mobil kontrol yüzeyi · v2 · modül katmanı</span></div>
+  <nav class="nav">
+    <a href="#akis">Akış</a><a href="#niyet">Niyet hiyerarşisi</a><a href="#kapi">Kapılar</a>
+    <a href="#atama">Agent atama</a><a href="#yontem">Yöntem</a><a href="#chat">Komut çubuğu</a><a href="#kapanis">Kapanış</a>
+  </nav>
+  <button class="tog" id="tog">Açık moda geç</button>
+</div>
+
+<div class="wrap">
+
+<div class="hier">
+  <div><div class="lv" style="color:var(--mod)">⓪ SEN ONAYLARSIN</div><div class="nm">Modül</div><div class="ds">Niyet, iş dilinde. Kabul kriterleri gözlenebilir sonuçtur.</div></div>
+  <div><div class="lv" style="color:var(--warn)">① KOŞULLU</div><div class="nm">Spec</div><div class="ds">Niyet, teknik dilde. Yalnız yeni invariant ya da YÜKSEK sınıfta sana gelir.</div></div>
+  <div><div class="lv" style="color:var(--ink-3)">OTOMATİK</div><div class="nm">Feature + invariant</div><div class="ds">Tier 0–3 kapıları kanıt üretir.</div></div>
+  <div><div class="lv" style="color:var(--tq)">② SEN TEYİT EDERSİN</div><div class="nm">Modül arayüz testi</div><div class="ds">Modül başına bir kez. Kriterleri tek tek gözlersin.</div></div>
+</div>
+
+<section class="sec" id="akis">
+  <div class="sec-h"><span class="sec-n">01</span><h2>Akış — üç kontrol noktası, üçü de farklı iş</h2></div>
+  <p class="lede">⓪ niyeti yargılar, ① yalnız gerçekten karar gerektiren spec'i sorar, ② bitmiş modülün deneyimini teyit eder. Aradaki her şey agent'ın.</p>
+  <div class="row">
+
+    <div class="unit"><div class="cap">01 · dürtme</div>
+    <div class="phone">
+      <div class="sb"><span>09:14</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="lock">
+        <div class="clock"><div class="t">09:14</div><div class="d">Salı, 28 Temmuz</div></div>
+        <div class="push">
+          <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
+            <span class="pill p-mod">⓪ modül</span><span class="tiny">Kantar · şimdi</span>
+          </div>
+          <div style="font-size:13.5px;font-weight:600;letter-spacing:-.01em">bayi-cuzdani onayını bekliyor</div>
+          <div style="font-size:12px;color:var(--ink-2);margin-top:4px;line-height:1.45">3 kabul kriteri · tahmini 2 spec · onaylamadan kod yazılmaz.</div>
+        </div>
+        <div style="text-align:center;margin-top:20px" class="tiny">gece 4 spec otomatik onaylandı</div>
+      </div>
+    </div></div>
+
+    <div class="unit"><div class="cap">02 · kuyruk — üç tip bir arada</div>
+    <div class="phone">
+      <div class="sb"><span>09:14</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>Kuyruk</h3></div><span class="pill p-alarm">4 bekliyor</span></div>
+      <div class="body">
+        <div class="item mod"><div class="hd"><span class="pill p-mod">⓪ modül onayı</span><span class="tiny">yeni</span></div>
+          <div class="ttl">bayi-cuzdani</div><div class="mt">3 kriter · kapsam sınırı çizilmiş</div></div>
+        <div class="item alarm"><div class="hd"><span class="pill p-alarm">hakemlik · kapı 5</span><span class="tiny">4 dk</span></div>
+          <div class="ttl">mustahsil-tescil</div><div class="mt">Idempotency ihlali · 3 seçenek</div></div>
+        <div class="item warn"><div class="hd"><span class="pill p-warn">① spec · YÜKSEK</span><span class="tiny">22 dk</span></div>
+          <div class="ttl">bayi-komisyon-dus</div><div class="mt">Para + eşzamanlılık · elle onay şart</div></div>
+        <div class="item ok"><div class="hd"><span class="pill p-ok">② arayüz testi</span><span class="tiny">1 sa</span></div>
+          <div class="ttl">MOD-plaka-okuma</div><div class="mt">M2 yeşil · 4 kriter gözlenecek</div></div>
+        <div class="pad" style="text-align:center;padding-top:18px">
+          <div style="font-size:12px;color:var(--ink-3);line-height:1.6">Kuyruk boşaldığında<br>uygulamayı kapatabilirsin</div></div>
+      </div>
+      <div class="cmd"><div class="box"><span>Sor veya iş ver</span><span>↑</span></div></div>
+      <div class="tabs"><div class="tab on"><div class="ic">◧</div><div class="lb">Kuyruk</div></div>
+        <div class="tab"><div class="ic">▦</div><div class="lb">Modüller</div></div>
+        <div class="tab"><div class="ic">⚙</div><div class="lb">Ayarlar</div></div></div>
+    </div></div>
+
+    <div class="unit"><div class="cap">03 · ⓪ modül onayı — asıl sorgulama burada</div>
+    <div class="phone">
+      <div class="sb"><span>09:15</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>bayi-cuzdani</h3><div class="sub">MOD-bayi-cuzdani · draft</div></div><span class="pill p-mod">⓪</span></div>
+      <div class="body">
+        <div class="rowline"><div class="tiny" style="margin-bottom:5px">neden var</div>
+          <div style="font-size:12.5px;line-height:1.55">Bayiler kontör harcıyor ama bakiyelerini göremiyor. Hesap sorulduğunda elle hesaplıyoruz ve tutmuyor.</div></div>
+        <div class="grp">kabul kriterleri · 3</div>
+        <div class="crit"><span class="mark" style="color:var(--ink-3)">K01</span><span class="txt">Bayi kendi bakiyesini doğru görebiliyor.</span></div>
+        <div class="crit"><span class="mark" style="color:var(--ink-3)">K02</span><span class="txt">Bayi hangi işlemde ne kadar düşüldüğünü geriye dönük görebiliyor.</span></div>
+        <div class="crit"><span class="mark" style="color:var(--ink-3)">K03</span><span class="txt">Bakiyesi yetmeyen bayi işlem yapamıyor ve nedenini anlıyor.</span></div>
+        <div class="grp">kapsam sınırı</div>
+        <div class="rowline"><div style="font-size:12.5px;line-height:1.6"><span style="color:var(--ok)">Dahil</span> bakiye, düşüm, harcama geçmişi<br><span style="color:var(--alarm)">Hariç</span> kontör satın alma, bayi tanımlama</div></div>
+        <div class="rule">Bu modül <b>2 spec</b> ve tahminen <b>1 adet ①</b> üretecek. Sınır 6 ①.</div>
+      </div>
+      <div class="acts"><button class="btn">Düzelt</button><button class="btn mod">Onayla</button></div>
+    </div></div>
+
+    <div class="unit"><div class="cap">04 · ① koşullu — neden sana geldiği yazıyor</div>
+    <div class="phone">
+      <div class="sb"><span>09:41</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>bayi-komisyon-dus</h3><div class="sub">SPEC-01 · draft · MOD-bayi-cuzdani</div></div></div>
+      <div class="body">
+        <div class="note m"><div class="lb">neden sana geldi</div><div class="tx">Ek 3 sınıfı YÜKSEK — para, geri-alınamaz kayıt, eşzamanlılık. Bu sınıfta otomatik onay devre dışı.</div></div>
+        <div class="rowline"><div class="tiny" style="margin-bottom:5px">karşıladığı modül kriteri</div>
+          <div style="font-size:12.5px"><span class="pill p-mod">K01</span> <span class="pill p-mod">K03</span></div></div>
+        <div class="rowline"><div class="tiny" style="margin-bottom:7px">invariant'lar · 3</div>
+          <div style="font-size:12.5px;line-height:1.95">Bakiye negatife düşemez<br>Aynı işlem iki kez düşülemez<br>Eşzamanlı çağrıda çift-harcama olamaz</div></div>
+        <div class="rowline"><div class="tiny" style="margin-bottom:5px">modülde yazılı olmayan yeni kural</div>
+          <div style="font-size:12.5px;color:var(--ok);line-height:1.5">Yok — üçü de modülün kısıtlarından türedi.</div></div>
+        <div class="kv"><span>Tahmini maliyet</span><span class="v mono">$0.40</span></div>
+      </div>
+      <div class="acts"><button class="btn">Düzelt</button><button class="btn pri">Onayla</button></div>
+    </div></div>
+
+  </div>
+</section>
+
+<section class="sec" id="niyet">
+  <div class="sec-h"><span class="sec-n">02</span><h2>Niyet hiyerarşisi — üst seviye artık modül</h2></div>
+  <p class="lede">Proje ekranının birimi feature değil modül. Feature'lar bir alt kırılım; teknik olmayan biri üst seviyeyi okuyabiliyor.</p>
+  <div class="row">
+
+    <div class="unit"><div class="cap">05 · modül listesi</div>
+    <div class="phone">
+      <div class="sb"><span>09:44</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>Kantar</h3><div class="sub">STEQAR · 3 makine bağlı</div></div><span class="chev">⌄</span></div>
+      <div class="body">
+        <div class="rowline" style="background:var(--scr-2)">
+          <div style="display:flex;gap:16px;flex-wrap:wrap">
+            <div><div style="font-size:20px;font-weight:600;letter-spacing:-.02em">5</div><div class="tiny">modül</div></div>
+            <div><div style="font-size:20px;font-weight:600;color:var(--ok);letter-spacing:-.02em">2</div><div class="tiny">tamam</div></div>
+            <div><div style="font-size:20px;font-weight:600;color:var(--alarm);letter-spacing:-.02em">1</div><div class="tiny">kapsam açığı</div></div>
+            <div><div style="font-size:20px;font-weight:600;color:var(--mod);letter-spacing:-.02em">1</div><div class="tiny">onay bekliyor</div></div>
+          </div>
+        </div>
+        <div class="rowline"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span style="font-size:13.5px;font-weight:600">bayi-cuzdani</span><span class="pill p-mod">⓪ draft</span></div>
+          <div class="tiny" style="margin-top:5px">3 kriter · henüz spec yok</div></div>
+        <div class="rowline"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span style="font-size:13.5px;font-weight:600">mustahsil-makbuzu</span><span class="pill p-alarm">M2 açık</span></div>
+          <div class="tiny" style="margin-top:5px">5 kriterin 4'ü kapsanmış · 1 hedef açıkta</div>
+          <div class="ladder"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="bad"></i></div>
+          <div class="ladder-lb"><span>K01</span><span>K02</span><span>K03</span><span>K04</span><span>K05</span></div></div>
+        <div class="rowline"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span style="font-size:13.5px;font-weight:600">plaka-okuma</span><span class="pill p-ok">② hazır</span></div>
+          <div class="tiny" style="margin-top:5px">4 kriter kapsandı · arayüz testi bekliyor</div>
+          <div class="ladder"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i></div>
+          <div class="ladder-lb"><span>K01</span><span>K02</span><span>K03</span><span>K04</span></div></div>
+        <div class="rowline"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span style="font-size:13.5px;font-weight:600">rfid-surucu</span><span class="pill p-warn">koşuyor</span></div>
+          <div class="tiny" style="margin-top:5px">3 kriter · 2 spec Tier 1'de</div></div>
+        <div class="kv"><span>Bugünkü harcama</span><span class="v mono">$1.84 / $5.00</span></div>
+      </div>
+      <div class="cmd"><div class="box"><span>Kantar'a sor veya iş ver</span><span>↑</span></div></div>
+      <div class="tabs"><div class="tab"><div class="ic">◧</div><div class="lb">Kuyruk</div></div>
+        <div class="tab on"><div class="ic">▦</div><div class="lb">Modüller</div></div>
+        <div class="tab"><div class="ic">⚙</div><div class="lb">Ayarlar</div></div></div>
+    </div></div>
+
+    <div class="unit"><div class="cap">06 · modül detayı — kriter → spec izi</div>
+    <div class="phone">
+      <div class="sb"><span>09:46</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>mustahsil-makbuzu</h3><div class="sub">MOD-mustahsil · ratified · 6 gündür açık</div></div></div>
+      <div class="body">
+        <div class="grp">kabul kriterleri → hangi spec karşılıyor</div>
+        <div class="crit"><span class="mark" style="color:var(--ok)">✓</span><span class="txt">Çiftçiye doğru tutarda makbuz kesiliyor.<div class="who">SPEC-mustahsil-kesim · ratified</div></span></div>
+        <div class="crit"><span class="mark" style="color:var(--ok)">✓</span><span class="txt">Kesinti oranı malzemeye göre doğru uygulanıyor.<div class="who">SPEC-mustahsil-kural · ratified</div></span></div>
+        <div class="crit"><span class="mark" style="color:var(--ok)">✓</span><span class="txt">Kesilen makbuz entegratöre iletiliyor.<div class="who">SPEC-mustahsil-ubl · ratified</div></span></div>
+        <div class="crit"><span class="mark" style="color:var(--ok)">✓</span><span class="txt">Muhasebeci aylık mutabakatı çıkarabiliyor.<div class="who">SPEC-mustahsil-rapor · ratified</div></span></div>
+        <div class="crit"><span class="mark" style="color:var(--alarm)">✕</span><span class="txt">Vergi mükellefi şahıs firmaya yanlışlıkla makbuz kesilmiyor.<div class="who" style="color:var(--alarm)">karşılayan spec yok</div></span></div>
+        <div class="grp">modül kapıları</div>
+        <div class="mgate"><span class="l"><b>M1</b>spec ↔ modül sadakati</span><span class="pill p-ok">yeşil</span></div>
+        <div class="mgate"><span class="l"><b>M2</b>kapsama boşluğu</span><span class="pill p-alarm">kırmızı</span></div>
+        <div class="mgate"><span class="l"><b>M3</b>yetim spec</span><span class="pill p-ok">yeşil</span></div>
+      </div>
+      <div class="acts"><button class="btn">Spec'ler</button><button class="btn">Eksiği tamamla</button></div>
+    </div></div>
+
+    <div class="unit"><div class="cap">07 · feature detayı — bir alt kırılım</div>
+    <div class="phone">
+      <div class="sb"><span>09:48</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>mustahsil-ubl</h3><div class="sub">SPEC-03 · ratified · MOD-mustahsil K03</div></div></div>
+      <div class="body">
+        <div class="rowline"><div class="tiny" style="margin-bottom:8px">kapı merdiveni</div>
+          <div class="ladder"><i class="ok"></i><i class="run"></i><i></i><i></i><i></i></div>
+          <div class="ladder-lb"><span>T0</span><span>T1</span><span>T2</span><span>T3</span><span>T4</span></div></div>
+        <div class="kv"><span><span class="pill p-ok">T0</span> lint, tip</span><span class="v">geçti</span></div>
+        <div class="kv"><span><span class="pill p-warn">T1</span> iç döngü</span><span class="v mono">14 / 30 tur</span></div>
+        <div class="kv"><span><span class="pill p-mute">T2</span> yakınsama</span><span class="v">bekliyor</span></div>
+        <div class="kv"><span><span class="pill p-mute">T3</span> ağır doğrulama</span><span class="v">bekliyor</span></div>
+        <div class="grp">son kanıt · 09:47:02</div>
+        <div class="rowline"><div style="font-size:12.5px;color:var(--ink-2);line-height:1.55">UBL supplier/customer eşlemesi ileri yönde doğrulandı. K1 ters-eşleme riski kapandı.</div></div>
+        <div class="kv"><span>Düşünme akışı</span><span class="sw"></span></div>
+        <div class="kv"><span>Ham chat akışı</span><span class="sw"></span></div>
+      </div>
+      <div class="cmd"><div class="box"><span>Bu feature'a sor</span><span>↑</span></div></div>
+    </div></div>
+
+  </div>
+  <div class="legend">
+    <div><i style="background:var(--mod)"></i> modül · niyet katmanı</div>
+    <div><i style="background:var(--ok)"></i> geçti</div>
+    <div><i style="background:var(--warn)"></i> koşuyor</div>
+    <div><i style="background:var(--alarm)"></i> kırmızı · seni bekliyor</div>
+  </div>
+</section>
+
+<section class="sec" id="kapi">
+  <div class="sec-h"><span class="sec-n">03</span><h2>Kapılar — ikisi farklı şeyi yakalar</h2></div>
+  <p class="lede">Kırmızı kapı "kod yanlış" der. M2 ise "kod doğru ama istenen şeyin bir parçası hiç yapılmamış" der. İkincisini başka hiçbir kapı göremez.</p>
+  <div class="row">
+
+    <div class="unit"><div class="cap">08 · hakemlik — kod seviyesi</div>
+    <div class="phone">
+      <div class="sb"><span>09:52</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>mustahsil-tescil</h3><div class="sub">SPEC-04 · Tier 3 · MOD-mustahsil K02</div></div></div>
+      <div class="body">
+        <div class="note a"><div class="lb">ihlal edilen invariant</div><div class="tx">Aynı işlem iki kez tescil edilemez</div></div>
+        <div class="rowline"><div style="font-size:12.5px;color:var(--ink-2);line-height:1.55">Aynı <span class="mono">session_id</span> ikinci kez geldiğinde ikinci makbuz kesiliyor. Kontör iki kez düşer.</div></div>
+        <div class="grp">ne yapayım</div>
+        <div class="opt"><div class="t">Atomik kilit ekle</div><div class="c">~15 dk · şema değişikliği yok</div></div>
+        <div class="opt"><div class="t">Spec'i gevşet</div><div class="c">modül kısıtına dokunur · ⓪ yeniden açılır</div></div>
+        <div class="opt"><div class="t">Bana bırak</div><div class="c">kuyrukta kalır · masada bakarım</div></div>
+        <div class="pad"><div class="tiny">Kimi K3 bu itirazı 09:52:11'de kaldırdı</div></div>
+      </div>
+    </div></div>
+
+    <div class="unit"><div class="cap">09 · M2 — katmanın var olma sebebi</div>
+    <div class="phone">
+      <div class="sb"><span>09:55</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>M2 · kapsama boşluğu</h3><div class="sub">MOD-mustahsil aday-tamam</div></div><span class="pill p-alarm">🔴</span></div>
+      <div class="body">
+        <div class="note m"><div class="lb">kapsanmamış hedef</div><div class="tx">K05 — Vergi mükellefi şahıs firmaya yanlışlıkla makbuz kesilmiyor.</div></div>
+        <div class="rowline"><div style="font-size:12.5px;color:var(--ink-2);line-height:1.55">4 spec'in tamamı ratified, tüm kapılar yeşil, kod doğru. Ama bu kritere hizmet eden hiçbir spec yok.</div></div>
+        <div class="grp">durum</div>
+        <div class="kv"><span>Spec'ler</span><span class="v" style="color:var(--ok)">4 / 4 yeşil</span></div>
+        <div class="kv"><span>Tier 0–3 kapıları</span><span class="v" style="color:var(--ok)">tamamı yeşil</span></div>
+        <div class="kv"><span>Modül kriterleri</span><span class="v" style="color:var(--alarm)">4 / 5 kapsandı</span></div>
+        <div class="kv"><span>② arayüz testi</span><span class="v" style="color:var(--alarm)">bloklu</span></div>
+        <div class="rule">Kapsanmamış hedef varken arayüz testi <b>başlatılamaz</b> — eksik ürünü test etmek olur.</div>
+      </div>
+      <div class="acts"><button class="btn">Kriteri düşür</button><button class="btn mod">Spec türet</button></div>
+    </div></div>
+
+    <div class="unit"><div class="cap">10 · ② modül arayüz testi</div>
+    <div class="phone">
+      <div class="sb"><span>16:20</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>plaka-okuma</h3><div class="sub">② arayüz testi · M2 yeşil</div></div></div>
+      <div class="body">
+        <div class="rowline"><div style="font-size:12.5px;color:var(--ink-2);line-height:1.55">Modülün kriterlerini tek tek gözle. Kod değil, deneyim test ediliyor.</div></div>
+        <div class="crit"><span class="mark" style="color:var(--ok)">✓</span><span class="txt">Kamyon girişinde plaka otomatik okunuyor.<div class="who">16:11 · teyit edildi</div></span></div>
+        <div class="crit"><span class="mark" style="color:var(--ok)">✓</span><span class="txt">Okunamayan plaka operatöre elle girdiriliyor.<div class="who">16:14 · teyit edildi</div></span></div>
+        <div class="crit"><span class="mark" style="color:var(--warn)">○</span><span class="txt">Gece ve yağmurda okuma oranı kabul edilebilir.<div class="who">bekliyor · sahada denenecek</div></span></div>
+        <div class="crit"><span class="mark" style="color:var(--ink-3)">○</span><span class="txt">Yanlış okuma tartıyı bloke etmiyor.<div class="who">bekliyor</div></span></div>
+        <div class="rule">Dördü de işaretlenmeden modül <b>kapanmaz.</b> Yarım işaretli modül kuyrukta kalır.</div>
+      </div>
+      <div class="acts"><button class="btn">Sonra devam</button><button class="btn pri">Modülü kapat</button></div>
+    </div></div>
+
+  </div>
+</section>
+
+<section class="sec" id="atama">
+  <div class="sec-h"><span class="sec-n">04</span><h2>Agent atama — kim üretir, kim kırar, kim hakemlik eder</h2></div>
+  <p class="lede">Ucuz model öğütür, pahalı model hakemlik eder. Tek kural sistemce zorunlu: üreten kendi işine not veremez.</p>
+  <div class="row">
+
+    <div class="unit"><div class="cap">11 · katman ataması</div>
+    <div class="phone">
+      <div class="sb"><span>10:02</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>Agent atama</h3><div class="sub">Kantar · varsayılan profil</div></div></div>
+      <div class="body">
+        <div class="slot"><div class="top-l"><span class="role">M · niyet kapıları</span><span class="pill p-mod">modül</span></div>
+          <div class="mdl">Claude Opus 5</div><div class="meta">M1/M2/M3 · niyet okuması pahalı modeli hak eder</div></div>
+        <div class="slot"><div class="top-l"><span class="role">T0 · deterministik</span><span class="pill p-mute">model yok</span></div>
+          <div class="mdl">ruff · mypy · tsc</div><div class="meta">maliyet 0 · anlık</div></div>
+        <div class="slot"><div class="top-l"><span class="role">T1 · üretici</span><span class="pill p-tq">öğütme</span></div>
+          <div class="mdl">GLM-5.2</div><div class="meta">$1.40 / $4.40 · 1M token</div></div>
+        <div class="slot"><div class="top-l"><span class="role">T2 · doğrulayıcı</span><span class="pill p-tq">çekişmeli</span></div>
+          <div class="mdl">Kimi K3</div><div class="meta">görevi kırmak · üreticiden farklı</div></div>
+        <div class="slot"><div class="top-l"><span class="role">T3 · hakem</span><span class="pill p-warn">pahalı</span></div>
+          <div class="mdl">Claude Opus 5</div><div class="meta">yalnızca çelişkide çağrılır</div></div>
+        <div class="rule"><b>Zorunlu kural.</b> Üretici ile doğrulayıcı aynı model olamaz. Aynısını seçersen T2 kapısı geçersiz sayılır ve merdiven durur.</div>
+      </div>
+      <div class="acts"><button class="btn">Sıfırla</button><button class="btn pri">Kaydet</button></div>
+    </div></div>
+
+    <div class="unit"><div class="cap">12 · modül başına ezme</div>
+    <div class="phone">
+      <div class="sb"><span>10:04</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>MOD-mustahsil</h3><div class="sub">atama · varsayılandan sapıyor</div></div></div>
+      <div class="body">
+        <div class="rowline"><div style="font-size:12.5px;color:var(--ink-2);line-height:1.55">Mali mevzuat modülü. Doğrulayıcıyı güçlendirdin, maliyet 3.2 katına çıktı.</div></div>
+        <div class="slot"><div class="top-l"><span class="role">T1 · üretici</span><span class="pill p-mute">varsayılan</span></div>
+          <div class="mdl">GLM-5.2</div></div>
+        <div class="slot"><div class="top-l"><span class="role">T2 · doğrulayıcı</span><span class="pill p-warn">ezildi</span></div>
+          <div class="mdl">Claude Opus 5</div><div class="meta">varsayılan: Kimi K3</div></div>
+        <div class="grp">bu modülde neden</div>
+        <div class="rowline"><div style="font-size:12.5px;line-height:1.55">GVK 94/11 stopaj kuralı yanlış uygulanırsa geriye dönük düzeltme gerekir. Ucuz doğrulayıcı iki kez kaçırdı.</div></div>
+        <div class="kv"><span>Bu modülde YÜKSEK spec</span><span class="v">3 / 5</span></div>
+        <div class="kv"><span>Otomatik ① onayı</span><span class="v" style="color:var(--alarm)">devre dışı</span></div>
+        <div class="kv"><span>Tahmini maliyet</span><span class="v mono">$1.28 / spec</span></div>
+      </div>
+      <div class="acts"><button class="btn">Varsayılana dön</button><button class="btn pri">Koru</button></div>
+    </div></div>
+
+  </div>
+</section>
+
+<section class="sec" id="yontem">
+  <div class="sec-h"><span class="sec-n">05</span><h2>Yöntem — döngünün ayar paneli</h2></div>
+  <p class="lede">Sistem, doğru şekilde rahatsız etmeme hakkını kazanmadan rahatsız etme hakkını kazanamaz. Bu bölüm o hakkı ayarlar.</p>
+  <div class="row">
+
+    <div class="unit"><div class="cap">13 · kapı merdiveni · Tier M eklendi</div>
+    <div class="phone">
+      <div class="sb"><span>10:08</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>Loop yöntemi</h3><div class="sub">Kantar · aktif profil</div></div></div>
+      <div class="body">
+        <div class="slot" style="background:var(--mod-bg)"><div class="top-l"><span class="role" style="color:var(--mod)">TIER M · niyet</span><span class="sw on"></span></div>
+          <div class="mdl">Modül kapıları</div><div class="meta">M1 her spec'te · M2/M3 modül aday-tamamda</div></div>
+        <div class="slot"><div class="top-l"><span class="role">T0</span><span class="sw on"></span></div>
+          <div class="mdl">Anlık kontroller</div><div class="meta">her kayıtta · lint, tip, format</div></div>
+        <div class="slot"><div class="top-l"><span class="role">T1</span><span class="sw on"></span></div>
+          <div class="mdl">Diff kapsamlı iç döngü</div><div class="meta">tavan 30 tur · yalnızca dokunulan dosyalar</div></div>
+        <div class="slot"><div class="top-l"><span class="role">T2</span><span class="sw on"></span></div>
+          <div class="mdl">Feature yakınsaması</div><div class="meta">invariant başına çekişmeli kontrol</div></div>
+        <div class="slot"><div class="top-l"><span class="role">T3</span><span class="sw on"></span></div>
+          <div class="mdl">Ağır doğrulama</div><div class="meta">tavan 3 tur · race, mimari tutarlılık, sadakat</div></div>
+        <div class="slot"><div class="top-l"><span class="role">T4</span><span class="sw"></span></div>
+          <div class="mdl">Periyodik tarama</div><div class="meta">haftalık · CVE, bağımlılık, ölü kod</div></div>
+      </div>
+      <div class="cmd"><div class="box"><span>Bu profili anlat</span><span>↑</span></div></div>
+    </div></div>
+
+    <div class="unit"><div class="cap">14 · kesinti bütçesi — katmanın vaadi</div>
+    <div class="phone">
+      <div class="sb"><span>10:10</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>Kesinti sayacı</h3><div class="sub">son 30 gün · 4 modül</div></div></div>
+      <div class="body">
+        <div class="rowline" style="background:var(--scr-2)">
+          <div style="display:flex;gap:20px">
+            <div><div style="font-size:22px;font-weight:600;color:var(--mod);letter-spacing:-.02em">4</div><div class="tiny">⓪ modül</div></div>
+            <div><div style="font-size:22px;font-weight:600;color:var(--warn);letter-spacing:-.02em">6</div><div class="tiny">① spec</div></div>
+            <div><div style="font-size:22px;font-weight:600;color:var(--tq);letter-spacing:-.02em">3</div><div class="tiny">② arayüz</div></div>
+          </div>
+          <div class="tiny" style="margin-top:9px">modül başına 3.25 kesinti · sınır 8</div></div>
+        <div class="kv"><span>Otomatik onaylanan spec</span><span class="v" style="color:var(--ok)">17 / 23</span></div>
+        <div class="kv"><span>Masadan uzak geçen süre</span><span class="v mono">%71</span></div>
+        <div class="grp">beni ne dürtsün</div>
+        <div class="kv"><span>⓪ modül onayı</span><span class="sw on"></span></div>
+        <div class="kv"><span>① spec · yalnız YÜKSEK</span><span class="sw on"></span></div>
+        <div class="kv"><span>Kırmızı kapı · T2–T3</span><span class="sw on"></span></div>
+        <div class="kv"><span>M2 kapsama açığı</span><span class="sw on"></span></div>
+        <div class="kv"><span>T1 tur uyarısı</span><span class="sw"></span></div>
+        <div class="kv"><span>Bütçe %80'i geçince</span><span class="sw on"></span></div>
+        <div class="rule">Modül başına kesinti <b>8'i</b> geçerse modüller fazla büyük ya da kriterler fazla belirsiz demektir.</div>
+      </div>
+    </div></div>
+
+  </div>
+</section>
+
+<section class="sec" id="chat">
+  <div class="sec-h"><span class="sec-n">06</span><h2>Komut çubuğu — girdi konuşma, çıktı yapı</h2></div>
+  <p class="lede">Chat bir sekme değil, her ekranın altındaki bağlam farkında giriş. Artık cevabı spec değil, modül taslağı olarak dönüyor.</p>
+  <div class="row">
+
+    <div class="unit"><div class="cap">15 · iş verdin, çıkabilirsin</div>
+    <div class="phone">
+      <div class="sb"><span>10:15</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>Kantar</h3></div><span class="pill p-tq">kapsam: tüm proje</span></div>
+      <div class="body" style="display:flex;flex-direction:column;justify-content:flex-end">
+        <div class="pad"><div class="bub">Bayiler bakiyelerini göremiyor, hesap sorunca elle hesaplıyoruz. Bunu bir modül olarak ele alalım.</div></div>
+      </div>
+      <div class="cmd"><div class="box" style="border-color:var(--tq);color:var(--tq)"><span>Gönderildi · çıkabilirsin</span><span>✓</span></div></div>
+    </div></div>
+
+    <div class="unit"><div class="cap">16 · cevap modül taslağı olarak döner</div>
+    <div class="phone">
+      <div class="sb"><span>10:19</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>Kantar</h3><div class="sub">4 dk önce · taslak hazır</div></div></div>
+      <div class="body">
+        <div class="pad">
+          <div class="tiny" style="margin-bottom:4px">modül taslağı hazırlandı</div>
+          <div class="card">
+            <div class="h"><div style="font-size:13.5px;font-weight:600">bayi-cuzdani</div>
+              <div class="tiny" style="margin-top:3px">MOD-bayi-cuzdani · draft · 3 kriter</div></div>
+            <div class="l">Bayi kendi bakiyesini doğru görebiliyor<br>Harcama geçmişini geriye dönük görebiliyor<br>Bakiyesi yetmeyen bayi nedenini anlıyor</div>
+            <div class="f"><button class="btn">Aç</button><button class="btn mod">Kuyruğa al</button></div>
+          </div>
+          <div style="margin-top:12px;font-size:12px;color:var(--ink-2);line-height:1.5">Kapsam sınırı önerildi: kontör satın alma ayrı modül.</div>
+          <div style="margin-top:10px;font-size:12px;color:var(--tq)">⌄ Ham akışı göster</div>
+        </div>
+      </div>
+      <div class="cmd"><div class="box"><span>Devam et</span><span>↑</span></div></div>
+    </div></div>
+
+    <div class="unit"><div class="cap">17 · ham akış · isteyene kısıtsız</div>
+    <div class="phone">
+      <div class="sb"><span>10:19</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>Ham akış</h3><div class="sub">3 model aktif · canlı</div></div><span class="pill p-tq">gizle</span></div>
+      <div class="body">
+        <div class="stream">
+          <p><span class="ts">10:15:07</span> <span class="ag">glm-5.2</span><br>Modül sınırını çiziyorum. Kontör satın alma ödeme akışı içeriyor, ayrı tutulmalı.</p>
+          <p><span class="ts">10:16:22</span> <span class="ag">tool</span> read_file<br>.claude/modules/_candidates.md</p>
+          <p><span class="ts">10:17:41</span> <span class="ag">opus-5 · M kapısı</span><br>Kriter taslağı teknik terim içeriyor: "idempotent düşüm" spec seviyesi bir ifade.</p>
+          <p><span class="ts">10:18:09</span> <span class="ag">glm-5.2</span><br>Düzeltildi: "aynı işlem için iki kez düşülmüyor" → iş dili.</p>
+          <p><span class="ts">10:18:55</span> <span class="ag">kimi-k3 · doğrulayıcı</span><br><span class="obj">İtiraz.</span> K03 gözlenebilir değil — "nedenini anlıyor" nasıl ölçülür?</p>
+          <p><span class="ts">10:19:12</span> <span class="ag">glm-5.2</span><br>Kabul. K03 yeniden: "işlem reddedildiğinde ekranda bakiye yetersizliği yazıyor".</p>
+        </div>
+      </div>
+    </div></div>
+
+  </div>
+</section>
+
+<section class="sec" id="kapanis">
+  <div class="sec-h"><span class="sec-n">07</span><h2>Ayarlar ve hedef durum</h2></div>
+  <p class="lede">Anahtar satırında "cihazda" yazması bir ayar değil, bir söz. Ve boş kuyruk başarısızlık değil, ürünün amacı.</p>
+  <div class="row">
+
+    <div class="unit"><div class="cap">18 · ayarlar</div>
+    <div class="phone">
+      <div class="sb"><span>10:24</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>Ayarlar</h3></div></div>
+      <div class="body">
+        <div class="grp">çalışma</div>
+        <div class="kv"><span>Bağlı makineler</span><span class="v">2 <span class="chev">›</span></span></div>
+        <div class="kv"><span>Agent atama</span><span class="v">4 katman <span class="chev">›</span></span></div>
+        <div class="kv"><span>Loop yöntemi</span><span class="v">M + T0–T4 <span class="chev">›</span></span></div>
+        <div class="kv"><span>Otomatik ① onayı</span><span class="v">3 koşul <span class="chev">›</span></span></div>
+        <div class="kv"><span>Sağlayıcı anahtarları</span><span class="v" style="color:var(--tq)">cihazda <span class="chev">›</span></span></div>
+        <div class="kv"><span>Bütçe tavanı</span><span class="v mono">$5 / gün <span class="chev">›</span></span></div>
+        <div class="grp">görünürlük</div>
+        <div class="kv"><span>Düşünme akışı</span><span class="sw"></span></div>
+        <div class="kv"><span>Ham chat akışı</span><span class="sw"></span></div>
+        <div class="kv"><span>Beni ne dürtsün</span><span class="v">6 eşik <span class="chev">›</span></span></div>
+        <div class="grp">hesap</div>
+        <div class="kv"><span>Abonelik ve cihazlar</span><span class="chev">›</span></div>
+        <div class="rule">Model çağrıların bu cihazdan ve bağlı makinelerinden çıkar. Sunucumuz yalnızca mesaj taşır.</div>
+      </div>
+      <div class="tabs"><div class="tab"><div class="ic">◧</div><div class="lb">Kuyruk</div></div>
+        <div class="tab"><div class="ic">▦</div><div class="lb">Modüller</div></div>
+        <div class="tab on"><div class="ic">⚙</div><div class="lb">Ayarlar</div></div></div>
+    </div></div>
+
+    <div class="unit"><div class="cap">19 · boş kuyruk · hedef durum</div>
+    <div class="phone">
+      <div class="sb"><span>18:02</span><span class="dots">▮▮▮ ⌁ ▰</span></div>
+      <div class="ab"><div><h3>Kuyruk</h3></div><span class="pill p-ok">boş</span></div>
+      <div class="body" style="display:flex;align-items:center;justify-content:center;text-align:center">
+        <div style="padding:0 28px">
+          <div style="font-size:34px;color:var(--ok);line-height:1;margin-bottom:16px">◎</div>
+          <div style="font-size:14.5px;font-weight:600;margin-bottom:7px;letter-spacing:-.01em">Seni bekleyen bir şey yok</div>
+          <div style="font-size:12.5px;color:var(--ink-2);line-height:1.6">2 modül koşuyor, 5 spec otomatik onaylandı. Karar gerekirse haber verilecek.</div>
+          <div class="tiny" style="margin-top:20px">bugün 6 saat 40 dk masadan uzaktaydın</div>
+        </div>
+      </div>
+      <div class="cmd"><div class="box"><span>Sor veya iş ver</span><span>↑</span></div></div>
+      <div class="tabs"><div class="tab on"><div class="ic">◧</div><div class="lb">Kuyruk</div></div>
+        <div class="tab"><div class="ic">▦</div><div class="lb">Modüller</div></div>
+        <div class="tab"><div class="ic">⚙</div><div class="lb">Ayarlar</div></div></div>
+    </div></div>
+
+  </div>
+</section>
+
+</div>
+
+<footer>Agentic Project Management · mobil kontrol yüzeyi v2 · modül katmanı entegre · tüm veriler örnektir</footer>
+
+<script>
+const t=document.getElementById('tog');
+t.addEventListener('click',()=>{
+  const r=document.documentElement;
+  const d=r.getAttribute('data-theme')==='dark';
+  r.setAttribute('data-theme',d?'light':'dark');
+  t.textContent=d?'Koyu moda geç':'Açık moda geç';
+});
+</script>
+</body>
+</html>

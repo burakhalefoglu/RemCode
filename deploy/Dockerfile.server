@@ -1,0 +1,68 @@
+# RemLinkAgent — AI coding agent for your machine, driven from your phone
+# Copyright (C) 2026 Burak Halefoğlu
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+# Build from the repository root:
+#   docker build -f deploy/Dockerfile.server -t rla-server .
+
+# ── build ────────────────────────────────────────────────────────────────────
+FROM golang:1.26.5-alpine AS build
+
+ARG VERSION=0.0.0-dev
+ARG COMMIT=unknown
+ARG BUILD_DATE=unknown
+ARG PKG=github.com/burakhalefoglu/RemLinkAgent
+
+WORKDIR /src
+
+# Dependency layer first so source edits do not invalidate the module cache.
+COPY go.mod go.sum* ./
+RUN go mod download
+
+COPY . .
+
+# CGO off keeps the binary static; -trimpath makes builds reproducible.
+RUN CGO_ENABLED=0 go build \
+    -trimpath \
+    -ldflags="-s -w \
+      -X '${PKG}/internal/version.version=${VERSION}' \
+      -X '${PKG}/internal/version.commit=${COMMIT}' \
+      -X '${PKG}/internal/version.date=${BUILD_DATE}'" \
+    -o /out/rla-server ./cmd/rla-server
+
+# ── runtime ──────────────────────────────────────────────────────────────────
+# Alpine rather than scratch: busybox wget backs the container healthcheck, and
+# ca-certificates are needed for APNs/FCM once push lands in P2.
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates tzdata \
+    && adduser -D -H -u 10001 rla \
+    && mkdir -p /data \
+    && chown rla:rla /data
+
+COPY --from=build /out/rla-server /rla-server
+
+USER rla
+WORKDIR /data
+VOLUME ["/data"]
+EXPOSE 8080
+
+ENV RLA_ADDR=":8080" \
+    RLA_LOG_LEVEL="info"
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD wget --spider -q http://127.0.0.1:8080/healthz || exit 1
+
+ENTRYPOINT ["/rla-server"]
