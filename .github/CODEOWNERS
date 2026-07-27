@@ -1,0 +1,22 @@
+# RemLinkAgent code owners
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything.
+*                       @burakhalefoglu
+
+# Security-critical surfaces — never merge without an explicit review.
+/docs/threat-model.md   @burakhalefoglu
+/docs/protocol.md       @burakhalefoglu
+/docs/decisions.md      @burakhalefoglu
+/SECURITY.md            @burakhalefoglu
+
+# Licence boundary (ADR-002). Changes here have legal consequences.
+/LICENSE                @burakhalefoglu
+/LICENSE_HEADER         @burakhalefoglu
+/LICENSE_HEADER_APACHE  @burakhalefoglu
+/CLA.md                 @burakhalefoglu
+/mobile/LICENSE         @burakhalefoglu
+
+# CI and release plumbing.
+/.github/               @burakhalefoglu
+/deploy/                @burakhalefoglu

@@ -1,49 +1,64 @@
 <!--
-  RemLinkAgent Pull Request Template
-  Please fill out the fields below. CI checks: lint, test, license-header.
+  RemLinkAgent pull request template.
+  CI runs: ci-go, ci-flutter, license-check, cla.
 -->
 
-## Description
+## What this does
 
-What does this PR do? What problem does it solve? (Keep it short and clear.)
+<!-- What problem does it solve? Keep it short. -->
 
-## Related Issue
+## Related issue
 
-<!-- Use the "Closes #123" / "Refs #456" format. Write "None" if there is no issue. -->
+<!-- "Closes #123" / "Refs #456", or "None". -->
 
 Closes #
 
-## Type of Change
+## Type of change
 
-- [ ] 🐛 Bug fix (fix)
-- [ ] ✨ New feature (feat)
-- [ ] 💥 Breaking change (changes existing behavior)
-- [ ] 📝 Documentation (docs)
-- [ ] ♻️ Refactor (no behavior change)
-- [ ] 🔧 Maintenance / dependency / CI (chore)
-- [ ] 🧪 Test addition/improvement
+- [ ] 🐛 Bug fix (`fix`)
+- [ ] ✨ Feature (`feat`)
+- [ ] 💥 Breaking change
+- [ ] 📝 Documentation (`docs`)
+- [ ] ♻️ Refactor — no behaviour change
+- [ ] 🔧 Maintenance / dependency / CI (`chore`)
+- [ ] 🧪 Tests
 
 ## Checklist
 
-- [ ] Code follows the rules in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
-- [ ] `make lint` and `make test` pass locally.
-- [ ] Tests added for new/changed code (where applicable).
-- [ ] **License header** added — new files start with the AGPL v3 header, `make license-check` passes.
-- [ ] Zero-Touch AI principle not violated (AI traffic/keys don't pass through the server).
-- [ ] Documentation updated (README/docs/code comments).
+- [ ] Follows [`CONTRIBUTING.md`](../CONTRIBUTING.md).
+- [ ] `make lint` and `make test` pass locally (Windows: `.\scripts\make.ps1 ci`).
+- [ ] Tests added or updated for changed behaviour.
+- [ ] `make license-check` passes — new files carry the header for **their directory**.
+- [ ] Documentation updated where behaviour changed.
 
-## Screenshots / Additional Notes (optional)
+## Licence boundary — [ADR-002](../docs/decisions.md#adr-002--split-licensing-agpl-core-apache-20-mobile)
 
-<!-- UI/log screenshots or additional context, if any. -->
+- [ ] Files in `cmd/`, `internal/`, `deploy/`, `scripts/` carry the **AGPL-3.0-or-later** header.
+- [ ] Files in `mobile/` carry the **Apache-2.0** header.
+- [ ] No AGPL code was copied into `mobile/`. (Apache → core is fine; core → mobile is not.)
+- [ ] New dependencies are compatible with the licence of the directory they land in — nothing copyleft in `mobile/`.
+
+## Project invariants
+
+<!-- These are the reasons the project exists. A PR that breaks one is rejected regardless of what it enables. -->
+
+- [ ] 🔑 **Zero-Touch AI** — AI traffic and API keys still never reach the relay.
+- [ ] 🔐 **E2E encryption** — the relay still handles ciphertext only ([ADR-004](../docs/decisions.md#adr-004--end-to-end-encryption-of-relay-payloads)).
+- [ ] 🟢 **Fail-Loud** — no new path reports success on an error.
+- [ ] 🌍 **i18n** — no hard-coded user-facing strings, in any language.
+- [ ] 📓 If this changes an [ADR](../docs/decisions.md), a superseding entry was added rather than editing history.
+- [ ] 🔀 If this changes the wire format, [`docs/protocol.md`](../docs/protocol.md) and the protocol version were updated.
+
+## Screenshots / notes
+
+<!-- Optional. -->
 
 ---
 
-## 📜 License Attestation
+## 📜 Licence attestation
 
-**By submitting this contribution, I confirm the following:**
-
-- [ ] I wrote and/or have the right to submit the changes in this PR.
-- [ ] I agree that my contribution will be distributed under **AGPL v3** (RemLinkAgent's license).
-- [ ] My contribution contains **no** code whose license is incompatible with AGPL v3 (e.g., GPLv2-only, proprietary).
-
-> See [`CONTRIBUTING.md` → License section](../CONTRIBUTING.md#-license-important--please-read) for details.
+- [ ] I wrote this, or I have the right to submit it.
+- [ ] I agree it ships under the licence of the directory it lands in — **AGPL-3.0-or-later** for the core, **Apache-2.0** for `mobile/`.
+- [ ] It contains no code under a licence incompatible with that (e.g. GPLv2-only, proprietary).
+- [ ] I have signed the [CLA](../CLA.md), or will when the bot asks. ([Why](../docs/decisions.md#adr-003--cla-required))
+- [ ] It contains no credentials, API keys or personal data.

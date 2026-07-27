@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<!--
+  RemLinkAgent landing page
+  Copyright (C) 2026 Burak Halefoğlu
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RemLinkAgent — an AI coding agent on your machine, driven from your phone</title>
+  <meta name="description" content="Open-source AI coding agent that runs on your own machine and is controlled from your phone. Bring your own keys, hot-swap models mid-chat, end-to-end encrypted. Works with Z.AI, Qwen, Kimi and any OpenAI-compatible provider.">
+  <meta name="author" content="Burak Halefoğlu">
+  <meta name="license" content="AGPL-3.0-or-later">
+  <link rel="canonical" href="https://remlinkagent.com/">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://remlinkagent.com/">
+  <meta property="og:site_name" content="RemLinkAgent">
+  <meta property="og:title" content="RemLinkAgent — an AI coding agent on your machine, driven from your phone">
+  <meta property="og:description" content="Bring your own keys. Hot-swap models mid-chat. End-to-end encrypted. Open source, AGPL v3.">
+  <!--
+    TODO: run `make og-image` on a machine with librsvg/ImageMagick/Inkscape to
+    produce og-image.png, then switch these two to the .png and add
+    og:image:type = image/png. Some crawlers (Twitter, Facebook) reject SVG.
+  -->
+  <meta property="og:image" content="https://remlinkagent.com/og-image.svg">
+  <meta property="og:image:alt" content="RemLinkAgent — an AI coding agent on your machine, driven from your phone">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="RemLinkAgent — an AI coding agent on your machine, driven from your phone">
+  <meta name="twitter:description" content="Bring your own keys. Hot-swap models mid-chat. End-to-end encrypted. Open source, AGPL v3.">
+  <meta name="twitter:image" content="https://remlinkagent.com/og-image.svg">
+
+  <meta name="theme-color" content="#0d1117">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔗</text></svg>">
+
+  <style>
+    :root {
+      --bg: #0d1117;
+      --bg-secondary: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --accent: #2f81f7;
+      --accent-dim: #1f6feb;
+      --green: #3fb950;
+      --amber: #d29922;
+      --gradient: linear-gradient(135deg, #2f81f7 0%, #a371f7 100%);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1.25rem;
+      position: relative;
+      overflow-x: hidden;
+      line-height: 1.5;
+    }
+
+    body::before, body::after {
+      content: '';
+      position: absolute;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.15;
+      z-index: 0;
+      animation: float 20s infinite ease-in-out;
+      pointer-events: none;
+    }
+    body::before { background: #2f81f7; top: -200px; left: -200px; }
+    body::after  { background: #a371f7; bottom: -200px; right: -200px; animation-delay: -10s; }
+
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      50%      { transform: translate(50px, 50px) scale(1.1); }
+    }
+
+    .container { max-width: 680px; width: 100%; text-align: center; position: relative; z-index: 1; }
+
+    .logo { font-size: 4rem; margin-bottom: 1.25rem; display: inline-block; animation: pulse 3s infinite ease-in-out; }
+    @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+
+    h1 {
+      font-size: clamp(2.1rem, 6vw, 3rem);
+      font-weight: 800;
+      margin-bottom: 0.6rem;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      background: var(--gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .tagline { font-size: 1.1rem; color: var(--text-muted); margin-bottom: 1rem; font-weight: 500; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.35rem 0.85rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 0.82rem; color: var(--amber); font-weight: 600;
+      margin-bottom: 1.75rem;
+    }
+    .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); animation: blink 1.5s infinite; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    .description { font-size: 1.02rem; color: var(--text-muted); line-height: 1.65; margin: 0 auto 1.5rem; max-width: 560px; }
+    .description strong { color: var(--text); font-weight: 600; }
+
+    .models { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2rem; }
+    .model-chip {
+      padding: 0.45rem 0.9rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.86rem; font-weight: 600; color: var(--text);
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .model-chip:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .model-chip.muted { color: var(--text-muted); font-weight: 500; }
+
+    /* Waitlist */
+    .waitlist { margin-bottom: 2rem; }
+    .waitlist-label { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.7rem; }
+    .waitlist-form { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
+    .waitlist input[type="email"] {
+      flex: 1 1 260px; max-width: 320px;
+      padding: 0.8rem 1rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text); font-size: 0.95rem; font-family: inherit;
+    }
+    .waitlist input[type="email"]::placeholder { color: #6e7681; }
+    .waitlist input[type="email"]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(47,129,247,0.15); }
+    .waitlist-note { font-size: 0.78rem; color: #6e7681; margin-top: 0.6rem; min-height: 1.2em; }
+    .waitlist-note.ok  { color: var(--green); }
+    .waitlist-note.err { color: #f85149; }
+
+    .cta-group { display: flex; gap: 0.7rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2.5rem; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.8rem 1.6rem;
+      border-radius: 10px;
+      font-size: 0.97rem; font-weight: 600; font-family: inherit;
+      text-decoration: none; cursor: pointer;
+      border: 1px solid transparent;
+      transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    }
+    .btn-primary { background: var(--gradient); color: #fff; box-shadow: 0 4px 14px 0 rgba(47,129,247,0.3); }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px 0 rgba(47,129,247,0.45); }
+    .btn-secondary { background: var(--bg-secondary); color: var(--text); border-color: var(--border); }
+    .btn-secondary:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 0.85rem; margin-bottom: 2rem; text-align: left;
+    }
+    .feature {
+      padding: 0.95rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      transition: border-color 0.2s;
+    }
+    .feature:hover { border-color: var(--accent-dim); }
+    .feature-icon  { font-size: 1.4rem; margin-bottom: 0.4rem; }
+    .feature-title { font-size: 0.92rem; font-weight: 700; margin-bottom: 0.2rem; }
+    .feature-desc  { font-size: 0.78rem; color: var(--text-muted); line-height: 1.45; }
+
+    .honesty {
+      font-size: 0.82rem; color: var(--text-muted);
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--amber);
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      text-align: left;
+      margin-bottom: 2rem;
+    }
+    .honesty a { color: var(--accent); text-decoration: none; }
+    .honesty a:hover { text-decoration: underline; }
+
+    footer {
+      font-size: 0.82rem; color: var(--text-muted);
+      border-top: 1px solid var(--border);
+      padding-top: 1.4rem; width: 100%;
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: 0.5rem;
+    }
+    footer a { color: var(--accent); text-decoration: none; transition: color 0.2s; }
+    footer a:hover { color: var(--text); }
+    .license { font-size: 0.74rem; opacity: 0.8; }
+
+    @media (max-width: 480px) {
+      .logo { font-size: 3.2rem; }
+      .features { grid-template-columns: 1fr; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, body::before, body::after { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">🔗📱</div>
+
+    <h1>RemLinkAgent</h1>
+    <p class="tagline">An AI coding agent on your machine, driven from your phone</p>
+
+    <div class="badge">
+      <span class="dot"></span>
+      Pre-alpha · in development
+    </div>
+
+    <p class="description">
+      The agent runs on <strong>your</strong> hardware, on <strong>your</strong> API keys, in your real
+      repository. Review its work and approve every risky command from your phone.
+      <strong>Hot-swap models mid-conversation</strong> without losing context — and everything
+      crossing our relay is <strong>end-to-end encrypted</strong>.
+    </p>
+
+    <div class="models">
+      <span class="model-chip">🐉 Z.AI</span>
+      <span class="model-chip">⚡ Qwen</span>
+      <span class="model-chip">🌙 Kimi</span>
+      <span class="model-chip muted">+ any OpenAI-compatible</span>
+    </div>
+
+    <div class="waitlist">
+      <div class="waitlist-label">Get an email when the first release lands. Nothing else, ever.</div>
+      <form class="waitlist-form" id="waitlist-form" novalidate>
+        <input type="email" id="waitlist-email" name="email" placeholder="you@example.com"
+               autocomplete="email" aria-label="Email address" required>
+        <button type="submit" class="btn btn-primary" id="waitlist-submit">Notify me</button>
+      </form>
+      <div class="waitlist-note" id="waitlist-note" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="cta-group">
+      <a href="https://github.com/burakhalefoglu/RemLinkAgent" class="btn btn-secondary">⭐ Star on GitHub</a>
+      <a href="https://github.com/burakhalefoglu/RemLinkAgent/tree/main/docs" class="btn btn-secondary">📖 Read the docs</a>
+    </div>
+
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">🔄</div>
+        <div class="feature-title">Hot-swap</div>
+        <div class="feature-desc">Change model mid-chat, keep the context</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔑</div>
+        <div class="feature-title">BYOK</div>
+        <div class="feature-desc">Your keys, your provider, zero markup</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔐</div>
+        <div class="feature-title">E2E encrypted</div>
+        <div class="feature-desc">Our relay only ever sees ciphertext</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">✋</div>
+        <div class="feature-title">You approve</div>
+        <div class="feature-desc">Nothing destructive runs unasked</div>
+      </div>
+    </div>
+
+    <p class="honesty">
+      <strong>Being straight with you:</strong> there is no usable release yet — the architecture,
+      roadmap and build scaffolding are public and implementation is starting.
+      Note also that the agent lives on your machine, so that machine has to be on and running the
+      daemon for any of this to work.
+      <a href="https://github.com/burakhalefoglu/RemLinkAgent/blob/main/docs/roadmap.md">See the roadmap →</a>
+    </p>
+
+    <footer>
+      <span>© 2026 Burak Halefoğlu</span>
+      <span class="license">
+        <a href="https://www.gnu.org/licenses/agpl-3.0.html">AGPL v3</a> core ·
+        <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache 2.0</a> mobile ·
+        Open source
+      </span>
+    </footer>
+  </div>
+
+  <script>
+    // Set this to a form endpoint (Buttondown, Formspree, ConvertKit …) to
+    // collect addresses. While it is empty the form degrades to the GitHub
+    // release-watch page rather than silently discarding submissions.
+    const WAITLIST_ENDPOINT = '';
+
+    const WATCH_URL = 'https://github.com/burakhalefoglu/RemLinkAgent/subscription';
+
+    const form   = document.getElementById('waitlist-form');
+    const email  = document.getElementById('waitlist-email');
+    const submit = document.getElementById('waitlist-submit');
+    const note   = document.getElementById('waitlist-note');
+
+    function setNote(message, kind) {
+      note.textContent = message;
+      note.className = 'waitlist-note' + (kind ? ' ' + kind : '');
+    }
+
+    if (!WAITLIST_ENDPOINT) {
+      setNote('Email signup is not wired up yet — the button opens GitHub release notifications.');
+    }
+
+    form.addEventListener('submit', async function (event) {
+      event.preventDefault();
+
+      if (!email.checkValidity()) {
+        setNote('That does not look like an email address.', 'err');
+        email.focus();
+        return;
+      }
+
+      if (!WAITLIST_ENDPOINT) {
+        window.open(WATCH_URL, '_blank', 'noopener');
+        setNote('Opened GitHub — choose "Custom → Releases" to be notified.', 'ok');
+        return;
+      }
+
+      submit.disabled = true;
+      setNote('Sending…');
+
+      try {
+        const response = await fetch(WAITLIST_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ email: email.value })
+        });
+
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+
+        form.reset();
+        setNote('You are on the list. Thanks!', 'ok');
+      } catch (err) {
+        // Fail loud — never let someone believe they signed up when they did not.
+        setNote('Could not sign you up. Watch the repo instead: ' + WATCH_URL, 'err');
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

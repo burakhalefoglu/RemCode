@@ -4,7 +4,10 @@
 .DS_Store
 Thumbs.db
 desktop.ini
-# --- Private documentation (internal roadmaps, PRD, license templates) ---
+# --- Private documentation ---
+# Public docs live in docs/ and ARE tracked (ADR-010). This directory holds
+# only internal material: the frozen PRD and archived pre-rewrite originals.
+# It has no backup — keep a copy outside this working tree.
 /documentation/*
 # --- Editors / IDE ---
 .vscode/

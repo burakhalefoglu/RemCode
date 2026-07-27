@@ -1,0 +1,75 @@
+# RemLinkAgent — AI coding agent for your machine, driven from your phone
+# Copyright (C) 2026 Burak Halefoğlu
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+# Self-hosted RemLinkAgent relay.
+#
+#   docker compose up -d
+#
+# Ships without TLS: put this behind a reverse proxy that terminates TLS on
+# 443. The relay only ever handles end-to-end encrypted payloads (ADR-004),
+# but transport TLS is still required — it protects the routing metadata and
+# the device tokens.
+
+name: remlinkagent
+
+services:
+  nats:
+    image: nats:2.10-alpine
+    container_name: rla-nats
+    restart: unless-stopped
+    command: ["-c", "/etc/nats/nats.conf"]
+    ports:
+      - "127.0.0.1:4222:4222" # client — loopback only; the relay reaches it over the compose network
+      - "127.0.0.1:8222:8222" # monitoring
+    volumes:
+      - ./nats.conf:/etc/nats/nats.conf:ro
+      - nats-data:/data/jetstream
+    healthcheck:
+      # healthz reports JetStream readiness, not just process liveness.
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.server
+    container_name: rla-server
+    restart: unless-stopped
+    depends_on:
+      nats:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      RLA_ADDR: ":8080"
+      RLA_LOG_LEVEL: "info"
+      RLA_NATS_URL: "nats://nats:4222"
+      RLA_DB_PATH: "/data/rla.sqlite"
+    volumes:
+      - server-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  nats-data:
+  server-data:

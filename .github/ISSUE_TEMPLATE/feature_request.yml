@@ -1,0 +1,55 @@
+name: 💡 Feature request
+description: Suggest a capability
+labels: [enhancement, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the [roadmap](https://github.com/burakhalefoglu/RemLinkAgent/blob/main/docs/roadmap.md)
+        and the [vision roadmap](https://github.com/burakhalefoglu/RemLinkAgent/blob/main/docs/vision-roadmap.md) first — it may already be planned.
+
+        The project is at P0 and deliberately narrow. A good request explains
+        the problem well enough that a different solution could be chosen.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what stops you? Describe the situation, not the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: Optional. Rough shape is fine.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today instead
+      description: Workarounds, other tools — this helps judge how much the gap costs.
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Where does this fit?
+      options:
+        - MVP (P0–P4) — blocks a first release
+        - Managed cloud (M1)
+        - Vision (X1–X6)
+        - Not sure
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Compatibility with project invariants
+      description: These constraints are load-bearing; a request that breaks one will not be accepted as written.
+      options:
+        - label: Does not require AI traffic or API keys to pass through the relay (Zero-Touch AI).
+          required: true
+        - label: Does not require the relay to read plaintext payloads (end-to-end encryption, ADR-004).
+          required: true

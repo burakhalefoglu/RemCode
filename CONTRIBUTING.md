@@ -1,184 +1,176 @@
 # 🤝 Contributing to RemLinkAgent
 
-> First off, thanks for taking the time to contribute! 🎉
-> This document explains how to contribute to the project.
-
-RemLinkAgent is an open-source mobile AI agent released under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. We welcome community contributions of all kinds — following this guide keeps the process smooth for everyone.
+Thanks for considering it. The project is at **P0** — no feature code exists yet — which means contributions can still shape the architecture rather than work around it.
 
 ---
 
-## 📜 License (Important — Please Read)
+## 📜 Licensing (please read before your first PR)
 
-RemLinkAgent is licensed under **AGPL v3**. By contributing to the project, you agree to the following:
+RemLinkAgent uses **two licences**, deliberately:
 
-1. **Your contributions are licensed under AGPL v3.** The code, documentation, and other content you submit become part of the project under the terms of the [AGPL-3.0 license](./LICENSE). This is AGPL's "inbound = outbound" rule: contributing to an AGPL project means you automatically accept that your contribution will be distributed under the same AGPL license.
+| Path | Licence | Header template |
+| :--- | :--- | :--- |
+| `cmd/`, `internal/`, `deploy/`, tooling | **AGPL-3.0-or-later** | [`LICENSE_HEADER`](LICENSE_HEADER) |
+| `mobile/` (Flutter client) | **Apache-2.0** | [`LICENSE_HEADER_APACHE`](LICENSE_HEADER_APACHE) |
 
-2. **No separate CLA (Contributor License Agreement) is required.** This project has **no** dual-licensing or commercial relicensing plans. Because of this, you are not asked to assign the copyright of your contributions to the project. AGPL v3 keeps everything under a single, transparent license.
+The core is AGPL so that a modified hosted relay has to publish its changes. The mobile client is Apache-2.0 because GPL-family terms conflict with App Store distribution — an AGPL iOS build is a licence problem waiting to happen. Full reasoning: [ADR-002](docs/decisions.md#adr-002--split-licensing-agpl-core-apache-20-mobile).
 
-3. **You retain ownership; the license is AGPL.** The copyright to the code you write remains yours; however, you grant everyone the right to use it under the terms of AGPL v3 (including modification, distribution, and network use).
+**Practical rules:**
 
-> **In short:** By submitting your code, you accept that it will be shared with everyone under AGPL v3. No hidden obligations beyond that.
+- Put a file in the directory whose licence you intend. `make license-add` applies the right header automatically.
+- Apache-2.0 code from `mobile/` may be reused in the core. **The reverse is not permitted** — AGPL code cannot move into `mobile/`.
+- Wire types are **not** shared as code. Both sides implement [`docs/protocol.md`](docs/protocol.md) independently. This is what keeps the boundary clean.
+
+### Contributor License Agreement
+
+A signed [**CLA**](CLA.md) is required. [CLA Assistant](https://cla-assistant.io/) posts a link on your first PR; signing is a single click and covers every future PR.
+
+**This reverses an earlier position, and it is worth saying why.** An earlier draft of this guide promised no CLA. It also planned to keep a future commercial dual-licence available. Those are mutually exclusive: relicensing needs someone who holds the rights to relicense, and that permission cannot be collected after the fact. Rather than quietly keep an impossible promise, the option is being preserved and the change stated openly — see [ADR-003](docs/decisions.md#adr-003--cla-required).
+
+**You keep your copyright.** The CLA grants a licence, it does not transfer ownership. Your work stays available under AGPL / Apache-2.0 to everyone, permanently, regardless of what happens to the project.
 
 ---
 
-## 🚀 Ways to Contribute
+## 🚀 Ways to help
 
-You don't have to write code — there are many ways to help:
-
-| Area | How? |
+| Area | How |
 | :--- | :--- |
-| 🐛 **Bug reports** | Open a new [Issue](../../issues) and describe the bug clearly |
-| 💡 **Feature requests** | [Open an Issue to discuss](../../issues) first, then code |
-| 🔧 **Code contributions** | Follow the development workflow below |
-| 📝 **Documentation** | Improvements to README, docs/, code comments |
-| 🌍 **Translations** | UI translations (TR + EN → other languages) |
-| 📣 **Spread the word** | Star the project ⭐, share it, write a blog post |
+| 🏗️ **P0–P1 implementation** | The critical path. See [`roadmap.md`](docs/roadmap.md) |
+| 🔬 **Provider contract tests** | Verify tool-calling and streaming for a provider — [P0.9](docs/roadmap.md#p0--scaffolding--de-risking) |
+| 🔐 **Threat model review** | Poke holes in [`threat-model.md`](docs/threat-model.md); adversarial reading is genuinely wanted |
+| 🐛 **Bug reports** | [Open an issue](../../issues) |
+| 💡 **Feature ideas** | [Open an issue](../../issues) first — check [`vision-roadmap.md`](docs/vision-roadmap.md), it may already be planned |
+| 📝 **Docs** | Anything unclear in [`docs/`](docs/) is a bug |
+| 🌍 **Translations** | UI is TR + EN; more languages welcome once P3 lands |
 
 ---
 
-## 🛠️ Development Environment Setup
+## 🛠️ Development setup
 
 ### Prerequisites
 
-- **Go** ≥ 1.22 (for CLI + Server)
-- **Flutter** ≥ 3.22 (for the Mobile app)
-- **Docker** + **Docker Compose** (for NATS/JetStream)
-- **Git** (signed commits recommended)
+| Tool | Version | Needed for |
+| :--- | :--- | :--- |
+| **Go** | ≥ 1.24 | CLI + server |
+| **Docker** + Compose | any recent | NATS/JetStream |
+| **Flutter** | ≥ 3.22 | Mobile app (P3 onward) |
+| **Git** | any | Signed commits appreciated |
 
-### Running the Project
+### Get running
 
 ```bash
-# Clone your fork
 git clone https://github.com/<your-username>/RemLinkAgent.git
 cd RemLinkAgent
-
-# Add upstream
 git remote add upstream https://github.com/burakhalefoglu/RemLinkAgent.git
 
-# Install dependencies & run
-make docker-up      # start NATS + server
-make cli            # build the CLI
-make mobile         # build the Flutter app
+make help          # every available target
+make cli server    # → ./bin/rla, ./bin/rla-server
+make test lint     # green on the skeleton
+make docker-up     # NATS + server
 ```
 
-> For the full architecture and development roadmap, see [`docs/roadmap.md`](docs/roadmap.md).
+The Flutter project does not exist yet — `make mobile` prints the exact `flutter create` command to bootstrap it ([P0.7](docs/roadmap.md#p0--scaffolding--de-risking)).
 
 ---
 
-## 📋 Development Workflow (Pull Requests)
+## 📋 Pull request workflow
 
-### 1. Discuss first
-Making a significant change (new feature, architectural refactor)? Open an **Issue** and discuss it first. This prevents you from writing code that may be rejected.
+**1. Discuss anything non-trivial first.** Open an issue before building a feature or restructuring something. It is cheaper than a rejected PR.
 
-### 2. Create a branch
+**2. Branch.**
+
 ```bash
-git checkout -b feat/descriptive-branch-name
-# or: fix/issue-123, docs/update, chore/dependency
+git checkout -b feat/short-description
 ```
 
-**Branch naming:**
-- `feat/...` — new feature
-- `fix/...` — bug fix
-- `docs/...` — documentation
-- `chore/...` — maintenance, dependencies, CI
-- `refactor/...` — code restructuring (no behavior change)
+`feat/` · `fix/` · `docs/` · `chore/` · `refactor/` · `test/`
 
-### 3. Write code & test
+**3. Build and check.**
+
 ```bash
-make lint           # golangci-lint (Go) + flutter analyze (Dart)
-make test           # all tests
-make license-check  # ⚠️ license header check (mandatory!)
+make lint            # golangci-lint + flutter analyze
+make test            # all tests
+make license-check   # header enforcement — CI blocks on this
 ```
 
-### 4. Commit conventions
-Use [Conventional Commits](https://www.conventionalcommits.org/):
+**4. Commit** using [Conventional Commits](https://www.conventionalcommits.org/):
 
-```
-<type>: <short description>
-
-<longer description (optional)>
-```
-
-**Examples:**
-```
+```text
 feat(cli): add context normalization for model hot-swap
-fix(server): fix heartbeat loss during WSS reconnect
-docs(roadmap): detail mobile architecture for Phase 3
+fix(server): handle heartbeat loss during WSS reconnect
+docs(protocol): document event envelope versioning
 chore(deps): bump go-openai to v1.40.0
 ```
 
-**Types:** `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `perf`, `ci`
+Types: `feat` `fix` `docs` `chore` `refactor` `test` `perf` `ci`
 
-### 5. Add the license header (MANDATORY)
-Every **new** source file must start with the AGPL v3 header:
+**5. Headers.** `make license-add` adds the correct one for each path. CI rejects PRs with missing headers.
 
-```bash
-make license-add     # automatically adds missing headers
-```
-
-See [`docs/license-ön-eki.md`](docs/license-ön-eki.md) for the header template and per-language examples. **CI will reject the PR if a header is missing.**
-
-### 6. Open a Pull Request
-- Fill out the PR template ([`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md)).
-- Link the related Issue with `Closes #123`.
-- Make sure CI is green.
+**6. Open the PR.** Fill in the template, link the issue (`Closes #123`), get CI green.
 
 ---
 
-## ✅ Code Standards
+## ✅ Code standards
 
-### General rules
-- **Go:** `gofmt` + `goimports` + `golangci-lint`. Return errors with `error`, don't panic.
-- **Dart/Flutter:** `dart format` + `flutter analyze`. Follow the Effective Dart guide.
-- **Tests:** Write tests for new features/fixes. Goal: coverage of changed code must not drop.
-- **Comments:** Explain "why", not "what". Comment non-obvious code sections.
-- **Dependencies:** Must be AGPL v3-compatible (MIT, BSD, Apache 2.0, MPL are fine; avoid GPLv2-only).
+**Go** — `gofmt` + `goimports` + `golangci-lint`. Return errors, do not panic. Wrap with context: `fmt.Errorf("pairing device: %w", err)`.
 
-### Architectural compliance
-- **Zero-Touch AI:** AI traffic and API keys must NEVER pass through the server. Contributions violating this principle will be rejected.
-- **Fail-Loud:** Don't silently report "passed" on errors. The system must halt loudly.
-- **Lightness:** CLI RAM < 30MB. Avoid adding unnecessary dependencies.
+**Dart** — `dart format` + `flutter analyze`, following Effective Dart.
 
-> For the complete architectural decisions, see [`docs/project.md`](docs/project.md) (PRD) and [`docs/loopeng.md`](docs/loopeng.md).
+**Tests** — required for new behaviour. Coverage of changed code must not drop.
 
----
+**Comments** — explain *why*. The *what* is already in the code.
 
-## 🐛 Bug Reports
+**Dependencies** — must be compatible with the licence of the directory they land in. MIT / BSD / Apache-2.0 / MPL are fine everywhere. GPLv2-only is not compatible with AGPL-3.0. Nothing copyleft in `mobile/`.
 
-A good bug report includes:
-- A clear title (summarizing the problem in one sentence)
-- **Reproduction steps** (1, 2, 3...)
-- Expected behavior vs. actual behavior
-- Version info (CLI/Server/OS/model)
-- Screenshots / logs if available
+**User-facing strings** — always i18n keys, never hard-coded, in either language. Applies to push notification bodies and CLI output alike.
 
----
+### Invariants that will get a PR rejected
 
-## 💰 Financial Model & Contributions (Transparency)
+These are not style preferences — they are the reasons the project exists:
 
-RemLinkAgent has two usage models:
-
-- **Self-host:** Always **free** and **fully-featured** (AGPL v3). Run it on any server you like.
-- **Managed Cloud:** Coming soon — $5/mo Pro plan, offering hosting/push/uptime as a "convenience fee".
-
-**Important:** Contributing does not entitle you to an automatic share of Managed Cloud revenue (see the License section above). AGPL v3 protects your contributions, but commercial revenue belongs to Burak Halefoğlu, who maintains the project.
-
-That said, a voluntary sponsorship mechanism via **OpenCollective / GitHub Sponsors** may be considered in the future to give back to the community. This is optional and not currently active.
+| Invariant | Meaning |
+| :--- | :--- |
+| 🔑 **Zero-Touch AI** | AI traffic and API keys never reach the relay. No exceptions, no debug flags, no "temporary" telemetry. |
+| 🔐 **E2E encryption** | The relay handles ciphertext. Any change that would let it read plaintext is rejected regardless of what it enables. |
+| 🟢 **Fail-Loud** | Never report success on an error path. Halt visibly. A silent green is worse than a red. |
+| 🪶 **Lightness** | CLI target < 30 MB RSS. Justify new dependencies. |
+| 📓 **Decisions are logged** | Changing an [ADR](docs/decisions.md) means adding a superseding entry, not editing history. |
 
 ---
 
-## ❓ Questions?
+## 🐛 Bug reports
 
-- Technical question → [GitHub Discussions](../../discussions) (if available) or an Issue
-- Security vulnerability → see [`SECURITY.md`](SECURITY.md) (responsible disclosure process)
-- License question → Open an Issue and label it `question`
+Include: a one-line summary, numbered reproduction steps, expected vs. actual, versions (CLI / server / OS / model / provider), and logs or screenshots.
 
----
-
-## 🌟 Code of Conduct
-
-This community expects everyone to treat each other with respect. Personal attacks, harassment, and discrimination are **not tolerated**. Be constructive and kind. If you experience an issue, report it via an Issue (or email if it needs to be confidential).
+**Never paste an API key, pairing token or device token into an issue.** Redact before posting. If you already have, rotate the key first, then report.
 
 ---
 
-*Your contributions make RemLinkAgent better for everyone. Thanks again!* ❤️
+## 🔐 Security issues
+
+Do **not** open a public issue. Follow the disclosure process in [`SECURITY.md`](SECURITY.md).
+
+---
+
+## 💰 Money, honestly
+
+- **Self-hosted:** free, full parity, permanently. No feature is reserved for the paid tier.
+- **Managed cloud (M1):** $5/mo Pro. You are paying for uptime, push infrastructure and upgrades — not for features.
+
+Managed-cloud revenue goes to the maintainer, who carries the hosting cost, the on-call burden and the legal exposure. Contributing does not create a claim on it. This is stated plainly because finding it out later feels worse than reading it now.
+
+What contributing *does* guarantee: your work stays AGPL / Apache-2.0 forever. Nobody — including the maintainer — can make it proprietary or take it away from you or anyone else.
+
+GitHub Sponsors / OpenCollective for redistributing to contributors may follow if revenue justifies it. Not active, and not a promise.
+
+---
+
+## 🌟 Code of conduct
+
+Treat people with respect. Harassment, personal attacks and discrimination are not tolerated. Assume good faith, critique work rather than people.
+
+Report problems by email to the maintainer if it needs to stay private.
+
+---
+
+*Thanks — early contributions are worth disproportionately more.* ❤️

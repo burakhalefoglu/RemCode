@@ -1,0 +1,72 @@
+name: ci-flutter
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-flutter-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: analyze & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # mobile/ is bootstrapped in P0.7. Until then this job reports skipped
+      # rather than failing — but it must never report success by omission,
+      # so the state is logged explicitly.
+      - name: Detect Flutter project
+        id: detect
+        run: |
+          if [ -f mobile/pubspec.yaml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::mobile/ is not bootstrapped yet (P0.7) — Flutter checks skipped"
+          fi
+
+      - uses: subosito/flutter-action@v2
+        if: steps.detect.outputs.present == 'true'
+        with:
+          flutter-version: "3.22.x"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        if: steps.detect.outputs.present == 'true'
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Verify formatting
+        if: steps.detect.outputs.present == 'true'
+        working-directory: mobile
+        run: dart format --set-exit-if-changed lib test
+
+      - name: Analyze
+        if: steps.detect.outputs.present == 'true'
+        working-directory: mobile
+        run: flutter analyze --fatal-infos
+
+      - name: Test
+        if: steps.detect.outputs.present == 'true'
+        working-directory: mobile
+        run: flutter test
+
+      # ADR-002: mobile/ is Apache-2.0 and must stay free of copyleft.
+      - name: Check for copyleft dependencies
+        if: steps.detect.outputs.present == 'true'
+        working-directory: mobile
+        run: |
+          if grep -riE '^\s*(gpl|agpl|lgpl)' pubspec.lock; then
+            echo "::error::copyleft dependency detected in mobile/ — see ADR-002"
+            exit 1
+          fi
+          echo "no copyleft dependencies found"
