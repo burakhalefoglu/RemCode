@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -145,18 +146,118 @@ func checkLint(root string) Result {
 	return res.pass()
 }
 
+// checkTests runs the suite and, as importantly, counts it.
+//
+// `-count=1` disables Go's own test cache deliberately. A cached package emits
+// no per-test events, so a warm cache would report a suite that shrank to
+// nothing — and this gate's whole second job is noticing exactly that. When
+// the gate's own signature says the inputs are unchanged it is skipped
+// wholesale; when it runs, it really runs.
+//
+// SPEC-deterministic-backbone-02
 func checkTests(root string) Result {
 	res := Result{Name: "tests", Tier: 1}
 
-	out := runCmd(root, "go", "test", "./...")
+	out := runCmd(root, "go", "test", "-json", "-count=1", "./...")
 	if out.missing {
 		return res.unverified("go is not on PATH")
 	}
+
+	tally := parseGoTestJSON(out.stdout)
+	res = res.count("tests_run", tally.run).
+		count("tests_skipped", tally.skipped).
+		count("packages_tested", tally.packages)
+	res.Summary = fmt.Sprintf("%d tests in %d packages, %d skipped",
+		tally.run, tally.packages, tally.skipped)
+
 	if out.exitCode != 0 {
-		return res.fail(tail(out.stdout, 30)...)
+		findings := tally.failures
+		if len(findings) == 0 {
+			// No test failed, yet the command did: a package that would not
+			// build, or a toolchain error. Either way the suite is not
+			// evidence, and the raw output is the only useful thing to show.
+			findings = tail(plainLines(out.stdout), 20)
+		}
+		return res.fail(tail(strings.Join(findings, "\n"), 30)...)
 	}
-	res.Summary = "all packages pass"
 	return res.pass()
+}
+
+// goTestEvent is one line of `go test -json`.
+type goTestEvent struct {
+	Action  string `json:"Action"`
+	Package string `json:"Package"`
+	Test    string `json:"Test"`
+	Output  string `json:"Output"`
+}
+
+// testTally is the count behind the exit code.
+//
+// Skips are counted apart from runs on purpose: a suite where a third of the
+// tests quietly began skipping exits 0 and looks identical to a healthy one.
+type testTally struct {
+	run      int
+	skipped  int
+	packages int
+	failures []string
+}
+
+func parseGoTestJSON(stdout string) testTally {
+	var tally testTally
+	outputs := map[string][]string{}
+	counted := map[string]bool{}
+
+	for _, line := range strings.Split(stdout, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "{") {
+			continue
+		}
+		var ev goTestEvent
+		if err := json.Unmarshal([]byte(line), &ev); err != nil {
+			continue
+		}
+
+		key := ev.Package + "." + ev.Test
+		switch ev.Action {
+		case "output":
+			if ev.Test != "" {
+				outputs[key] = append(outputs[key], strings.TrimRight(ev.Output, "\r\n"))
+			}
+		case "pass", "fail", "skip":
+			if ev.Test == "" {
+				if ev.Action != "skip" {
+					tally.packages++
+				}
+				continue
+			}
+			if counted[key] {
+				continue
+			}
+			counted[key] = true
+			switch ev.Action {
+			case "skip":
+				tally.skipped++
+			case "fail":
+				tally.run++
+				tally.failures = append(tally.failures, outputs[key]...)
+			default:
+				tally.run++
+			}
+		}
+	}
+	return tally
+}
+
+// plainLines keeps the non-JSON part of a `go test -json` stream — build
+// errors arrive there, and printing raw event objects at a human helps nobody.
+func plainLines(stdout string) string {
+	var kept []string
+	for _, line := range strings.Split(stdout, "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" && !strings.HasPrefix(trimmed, "{") {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
 }
 
 // checkZeroTouchAI enforces the project's flagship invariant structurally:
@@ -203,6 +304,12 @@ func checkZeroTouchAI(root string) Result {
 	if err != nil {
 		return res.unverified("import scan failed: %v", err)
 	}
+
+	// The count is recorded rather than guarded: this rule genuinely holds
+	// vacuously until P2 creates the relay, and a floor here would fail a gate
+	// for being early rather than for being blind. Recording it means the
+	// artifact says "0 relay files" instead of implying the rule was tested.
+	res = res.count("relay_files", relayFiles)
 
 	if relayFiles == 0 {
 		res.Summary = "no relay packages exist yet — rule holds vacuously (tripwire armed for P2)"
@@ -257,6 +364,7 @@ func checkSecretLogging(root string) Result {
 		return res.unverified("AST scan failed: %v", err)
 	}
 
+	res = res.count("files_scanned", scanned)
 	res.Summary = fmt.Sprintf("%d files scanned", scanned)
 	if len(findings) > 0 {
 		return res.fail(findings...)
@@ -294,6 +402,7 @@ func checkFakeGreen(root string) Result {
 		return res.unverified("AST scan failed: %v", err)
 	}
 
+	res = res.count("tests_declared", tests)
 	if tests == 0 {
 		return res.unverified("no test functions found — nothing to audit")
 	}
@@ -338,7 +447,7 @@ func checkCoverage(root string) Result {
 		return res.unverified("cache dir: %v", err)
 	}
 
-	out := runCmd(root, "go", "test", "-coverprofile="+profile, "./...")
+	out := runCmd(root, "go", "test", "-count=1", "-coverprofile="+profile, "./...")
 	if out.missing {
 		return res.unverified("go is not on PATH")
 	}
@@ -355,6 +464,12 @@ func checkCoverage(root string) Result {
 	if !ok {
 		return res.unverified("could not parse coverage total")
 	}
+
+	// A percentage says nothing about how much was weighed. 100% of two
+	// functions and 100% of two hundred are the same number and not the same
+	// claim, and the profile silently narrowing is how the second becomes the
+	// first without anyone noticing.
+	res = res.count("functions_measured", countCoveredFunctions(fnOut.stdout))
 
 	floor := readCoverageFloor(root)
 	res.Summary = fmt.Sprintf("%.1f%% statements (floor %.1f%%)", total, floor)
@@ -381,6 +496,22 @@ func parseTotalCoverage(out string) (float64, bool) {
 	return 0, false
 }
 
+// countCoveredFunctions counts the function rows in `go tool cover -func`
+// output — how much source the profile actually spanned, as distinct from the
+// percentage of it that was exercised.
+func countCoveredFunctions(out string) int {
+	n := 0
+	for _, line := range strings.Split(out, "\n") {
+		if strings.TrimSpace(line) == "" || strings.HasPrefix(line, "total:") {
+			continue
+		}
+		if strings.Contains(line, "%") {
+			n++
+		}
+	}
+	return n
+}
+
 func readCoverageFloor(root string) float64 {
 	body, err := os.ReadFile(filepath.Join(root, coverageFloorFile)) //nolint:gosec // fixed path
 	if err != nil {
@@ -404,7 +535,24 @@ func checkDocLinks(root string) Result {
 		return res.fail(tail(out.stdout, 25)...)
 	}
 	res.Summary = strings.TrimSpace(lastLine(out.stdout))
+	// checkdocs closes with "N files, M anchors indexed, K problems". A link
+	// checker that indexed nothing reports no broken links.
+	res = res.count("files_indexed", leadingInt(res.Summary))
 	return res.pass()
+}
+
+// leadingInt reads the first integer in a summary line, or 0 when there is
+// none — an unparsed summary must not be mistaken for a large count.
+func leadingInt(s string) int {
+	fields := strings.Fields(s)
+	if len(fields) == 0 {
+		return 0
+	}
+	n, err := strconv.Atoi(strings.TrimSuffix(fields[0], ","))
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 func checkLicenceHeaders(root string) Result {

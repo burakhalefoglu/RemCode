@@ -61,8 +61,16 @@ gate status distinct from `Pass`.
 `SPEC-…` id and something in the code cites it. Every test asserts something.
 Every gate can prove it still detects breakage.
 
-**Enforced by:** `gate t2 → spec-fidelity`, `gate t1 → fake-green`,
-`gate canary`.
+**And every gate says how much it examined.** An exit code answers *"did what
+ran pass?"*; it cannot answer *"did anything run?"* — and a suite that selects
+zero tests exits 0 exactly like a healthy one. Counts are therefore part of the
+evidence, held to declared floors and to a committed baseline, and a cached
+pass is re-judged against the counts it recorded rather than trusted for having
+matched a signature
+([ADR-028](../docs/decisions.md#adr-028--counts-are-evidence-and-every-convenience-buys-a-guard)).
+
+**Enforced by:** `gate full → spec-fidelity`, `gate fast → fake-green`,
+`gate canary`, and the guard set in `scripts/gate/evidence.go`.
 
 ## P5 — Gates are immutable to the loop
 
@@ -72,7 +80,13 @@ lowering the bar.
 
 Gate definitions live in compiled Go (`scripts/gate/main.go`), not in a config
 file, so weakening one is a code change that appears in review. The coverage
-floor is a ratchet: it may rise freely and only ever falls deliberately.
+floor and the test baseline are ratchets: they may rise freely and only ever
+fall deliberately.
+
+**Guards, budgets and baselines are covered by this too.** They are the price
+of the conveniences elsewhere in the pipeline — caching, tier splitting,
+deferral. A loop that can delete the price gets the convenience for free, and
+the system reverts to the state that made the guard necessary.
 
 **And not cheap for the human either.** Lowering an acceptance criterion to
 clear a red intent gate is the same act performed by hand, and it is never one
@@ -222,6 +236,28 @@ Self-graded is not passed and not failed — it is `COULD NOT VERIFY`
 **Enforced by:** identity check at ladder entry; canary asserting a same-model
 configuration halts rather than passes.
 See [ADR-022](../docs/decisions.md#adr-022--tiered-model-assignment-and-the-verifier-is-never-the-producer).
+
+## P14 — A deterministic verdict is an exit code, and judgement reads it
+
+If a check's output is an exit code, **a model does not run it.** The script
+runs it, the exit code *is* the verdict, and the run writes one artifact
+recording what ran and what it saw.
+
+Judgement gets what is left — architectural intent, backward fidelity,
+black-box exploration — and works under two bounds: it **reads the artifact and
+runs no tools**, and it **reports rather than blocks a round**. Blocking
+authority stays with the exit codes and the readiness verdict.
+
+This is a measurement, not a preference: deterministic work put through a model
+cost 10–30× as much and returned an unstable verdict — the same unchanged code
+passing one round and failing the next. A layer whose green is unstable never
+converges, so *"iterate until everything is green"* stops having a terminating
+condition.
+
+**Enforced by:** `scripts/gate` owning every exit-code check;
+`gate verify` printing the artifact path alongside the judgement obligations;
+the self-audit's **backbone leakage** check
+([ADR-027](../docs/decisions.md#adr-027--a-deterministic-verdict-is-an-exit-code-and-judgement-reads-it)).
 
 ---
 

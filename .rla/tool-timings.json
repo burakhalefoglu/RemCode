@@ -1,0 +1,80 @@
+{
+  "measured": "2026-07-28T09:46:27Z",
+  "total_ms": 10391,
+  "mode_ms": {
+    "fast": 5752,
+    "full": 10400
+  },
+  "unmeasured": [
+    "lint",
+    "licence-headers",
+    "race",
+    "vulnerabilities"
+  ],
+  "checks": {
+    "build": {
+      "ms": 1844,
+      "verdict": "PASSED"
+    },
+    "coverage-ratchet": {
+      "ms": 4268,
+      "verdict": "PASSED"
+    },
+    "doc-links": {
+      "ms": 304,
+      "verdict": "PASSED"
+    },
+    "fake-green": {
+      "ms": 6,
+      "verdict": "PASSED"
+    },
+    "gofmt": {
+      "ms": 36,
+      "verdict": "PASSED"
+    },
+    "licence-boundary": {
+      "ms": 0,
+      "verdict": "PASSED"
+    },
+    "licence-headers": {
+      "ms": 8,
+      "verdict": "COULD NOT VERIFY"
+    },
+    "lint": {
+      "ms": 8,
+      "verdict": "COULD NOT VERIFY"
+    },
+    "race": {
+      "ms": 41,
+      "verdict": "COULD NOT VERIFY"
+    },
+    "secret-logging": {
+      "ms": 6,
+      "verdict": "PASSED"
+    },
+    "spec-fidelity": {
+      "ms": 3,
+      "verdict": "PASSED"
+    },
+    "spec-hygiene": {
+      "ms": 0,
+      "verdict": "PASSED"
+    },
+    "tests": {
+      "ms": 3399,
+      "verdict": "PASSED"
+    },
+    "vet": {
+      "ms": 442,
+      "verdict": "PASSED"
+    },
+    "vulnerabilities": {
+      "ms": 19,
+      "verdict": "COULD NOT VERIFY"
+    },
+    "zero-touch-ai": {
+      "ms": 7,
+      "verdict": "PASSED"
+    }
+  }
+}

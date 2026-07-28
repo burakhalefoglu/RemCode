@@ -70,6 +70,25 @@ type Result struct {
 	Findings []string
 	Duration time.Duration
 	Cached   bool
+
+	// Evidence is how much this gate actually examined — tests run, files
+	// read, requirements checked. An exit code cannot express "I looked at
+	// nothing and found nothing wrong", and that sentence describes both
+	// silent greens this project has caught.
+	Evidence Evidence
+
+	// Guards are the rules applied to Evidence after the run. They may worsen
+	// a verdict, never improve one.
+	Guards []Guard
+}
+
+// count records a piece of evidence.
+func (r Result) count(key string, n int) Result {
+	if r.Evidence == nil {
+		r.Evidence = Evidence{}
+	}
+	r.Evidence[key] = n
+	return r
 }
 
 func (r Result) pass() Result {
@@ -105,6 +124,23 @@ type Check struct {
 	Inputs []string
 
 	Run func(root string) Result
+
+	// MinEvidence is the floor each named count must reach for this gate's
+	// pass to mean anything. A scanner that read no files and a suite that ran
+	// no tests both exit 0; this is what separates them from a real green.
+	MinEvidence map[string]int
+
+	// BaselineKey and BaselineFile ratchet a count against a committed floor,
+	// catching erosion rather than collapse: `MinEvidence` sees 118 tests fall
+	// to 0, only a baseline sees them fall to 90.
+	BaselineKey  string
+	BaselineFile string
+
+	// Budget bounds this step's wall clock. Exceeding it is a red, not a
+	// warning: a step that outgrew its budget has changed which tier it
+	// belongs in, and the tier split is the only reason the inner loop is
+	// affordable.
+	Budget time.Duration
 
 	// CanaryFiles are planted into an empty directory on which this check must
 	// report Fail. A gate that cannot detect deliberate breakage proves

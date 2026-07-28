@@ -248,6 +248,7 @@ func checkSpecFidelity(root string) Result {
 		}
 	}
 
+	res = res.count("requirements_ratified", ratified).count("requirements_covered", covered)
 	res.Summary = fmt.Sprintf("%d/%d ratified requirements implemented", covered, ratified)
 	if len(findings) > 0 {
 		return res.fail(findings...)
@@ -296,6 +297,7 @@ func checkSpecHygiene(root string) Result {
 		}
 	}
 
+	res = res.count("specs_parsed", len(specs))
 	res.Summary = fmt.Sprintf("%d spec artifacts", len(specs))
 	if len(findings) > 0 {
 		return res.fail(findings...)

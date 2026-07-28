@@ -23,12 +23,19 @@
 // requiring judgement are listed by `gate verify` as review obligations rather
 // than being silently skipped.
 //
-//	go run ./scripts/gate t0        # after every edit
-//	go run ./scripts/gate t1        # every fix iteration
-//	go run ./scripts/gate t2        # at convergence, once per feature
-//	go run ./scripts/gate t3        # when a feature is candidate-complete
-//	go run ./scripts/gate verify    # before a human tests the interface
+// Tiers classify how often a check is worth running. Modes are what you
+// actually run: `fast` after every change, `full` before anyone is asked for
+// anything. Both write a machine-readable artifact under .rla/state/, which is
+// what the judged half of the pipeline reads — a reviewing model reads the
+// evidence, it does not re-run the tools.
+//
+//	go run ./scripts/gate fast      # every fix iteration
+//	go run ./scripts/gate full      # at convergence
+//	go run ./scripts/gate t0…t3     # one tier, when you want just that one
+//	go run ./scripts/gate verify    # full, plus checkpoint ①
+//	go run ./scripts/gate evidence  # the artifact a reviewer should read
 //	go run ./scripts/gate canary    # prove the gates can still detect breakage
+//	go run ./scripts/gate timings   # measure the wall clock, do not guess it
 //	go run ./scripts/gate spec      # spec artifact status
 //
 // Exit codes: 0 passed · 1 failed · 4 could not verify.
@@ -43,6 +50,37 @@ import (
 	"strings"
 	"time"
 )
+
+// runMode is a unit of running; a tier is a unit of classification. Conflating
+// the two is what produces a pipeline nobody runs because every invocation
+// costs the most expensive check in it.
+//
+// SPEC-deterministic-backbone-06
+type runMode struct {
+	Name  string
+	Tiers []int
+	// Budget is the mode's ceiling. It is not a target: the measured cost in
+	// .rla/tool-timings.json is the number that matters, and a measurement
+	// drifting towards its budget is the signal that work was quietly added to
+	// a layer meant to stay cheap.
+	Budget time.Duration
+	Desc   string
+}
+
+var (
+	modeFast = runMode{
+		Name: "fast", Tiers: []int{0, 1}, Budget: 2 * time.Minute,
+		Desc: "every fix iteration — static checks and the suite",
+	}
+	modeFull = runMode{
+		Name: "full", Tiers: []int{0, 1, 2, 3}, Budget: 30 * time.Minute,
+		Desc: "at convergence — everything, before a human is asked for anything",
+	}
+)
+
+func tierMode(tier int) runMode {
+	return runMode{Name: fmt.Sprintf("t%d", tier), Tiers: []int{tier}, Desc: tierName(tier)}
+}
 
 const (
 	exitOK         = 0
@@ -66,6 +104,8 @@ func main() {
 	fs.Usage = usage
 	noCache := fs.Bool("no-cache", false, "ignore the selective regression cache")
 	verbose := fs.Bool("v", false, "show findings for passing gates too")
+	mode := fs.String("mode", modeFull.Name, "which run's artifact to read (evidence)")
+	record := fs.Bool("record", false, "commit the measurement as the new baseline (timings)")
 	if err := fs.Parse(rest); err != nil {
 		os.Exit(exitUsage)
 	}
@@ -79,11 +119,25 @@ func main() {
 
 	switch cmd {
 	case "t0", "t1", "t2", "t3":
-		tier := int(cmd[1] - '0')
-		os.Exit(runTiers(root, []int{tier}, *noCache, *verbose))
+		code, _ := runChecks(root, tierMode(int(cmd[1]-'0')), *noCache, *verbose)
+		os.Exit(code)
+
+	case "fast":
+		code, _ := runChecks(root, modeFast, *noCache, *verbose)
+		os.Exit(code)
+
+	case "full":
+		code, _ := runChecks(root, modeFull, *noCache, *verbose)
+		os.Exit(code)
 
 	case "verify":
 		os.Exit(runVerify(root, *noCache, *verbose))
+
+	case "evidence":
+		os.Exit(reportEvidence(root, *mode))
+
+	case "timings":
+		os.Exit(runTimings(root, *record))
 
 	case "canary":
 		os.Exit(runCanary())
@@ -114,12 +168,20 @@ func usage() {
 Usage:
   gate <command> [flags]
 
-Commands:
-  t0           Instant gates      — format, compile, vet
+Run these:
+  fast         Tiers 0–1  — after every change
+  full         Tiers 0–3  — at convergence
+  verify       full, plus the checkpoint ① spec-ratification rule
+
+One tier at a time:
+  t0           Instant            — format, compile, vet
   t1           Inner loop         — lint, tests, conformance, fake-green
   t2           Convergence        — coverage ratchet, spec fidelity, licences
   t3           Heavy              — race detector, vulnerability scan
-  verify       Everything, plus the checkpoint ① spec-ratification rule
+
+About the run itself:
+  evidence     The artifact a reviewing model should read instead of re-running
+  timings      Measure each gate's wall clock (-record to set the baseline)
   canary       Prove each gate still detects deliberate breakage
   spec         Spec artifact status
   clear-cache  Discard the selective regression cache
@@ -127,6 +189,8 @@ Commands:
 Flags:
   -no-cache    Re-run gates even when their inputs are unchanged
   -v           Show detail for passing gates
+  -mode        Which run's artifact to read: fast or full (evidence)
+  -record      Write the measurement as the committed baseline (timings)
 
 Exit codes: 0 passed · 1 failed · 4 could not verify
 Reference: docs/development-loop.md
@@ -148,14 +212,14 @@ func registry() []Check {
 	return []Check{
 		{
 			ID: "gofmt", Tier: 0, Desc: "Go formatting",
-			Inputs: goInputs, Run: checkGofmt,
+			Inputs: goInputs, Run: checkGofmt, Budget: time.Minute,
 			CanaryFiles: map[string]string{
 				"bad.go": "package  x\nfunc  F( ) {\n\t\t}\n",
 			},
 		},
 		{
 			ID: "build", Tier: 0, Desc: "compiles",
-			Inputs: goInputs, Run: checkBuild,
+			Inputs: goInputs, Run: checkBuild, Budget: 5 * time.Minute,
 			CanaryFiles: map[string]string{
 				"go.mod":    "module canary\n\ngo 1.24\n",
 				"broken.go": "package canary\n\nfunc F() int { return }\n",
@@ -163,17 +227,23 @@ func registry() []Check {
 		},
 		{
 			ID: "vet", Tier: 0, Desc: "suspicious constructs",
-			Inputs: goInputs, Run: checkVet,
+			Inputs: goInputs, Run: checkVet, Budget: 5 * time.Minute,
 			CanaryFiles: map[string]string{
 				"go.mod": "module canary\n\ngo 1.24\n",
 				"vet.go": "package canary\n\nimport \"fmt\"\n\nfunc F() { fmt.Printf(\"%d\", \"not a number\") }\n",
 			},
 		},
 
-		{ID: "lint", Tier: 1, Desc: "golangci-lint", Inputs: goInputs, Run: checkLint},
+		{ID: "lint", Tier: 1, Desc: "golangci-lint", Inputs: goInputs, Run: checkLint, Budget: 8 * time.Minute},
 		{
 			ID: "tests", Tier: 1, Desc: "unit tests",
-			Inputs: goInputs, Run: checkTests,
+			Inputs: goInputs, Run: checkTests, Budget: 8 * time.Minute,
+			// The suite's exit code says whether what ran passed. These say
+			// whether anything ran, and whether it is still the same suite —
+			// the two questions a green `go test` cannot answer.
+			MinEvidence:  map[string]int{"tests_run": 1},
+			BaselineKey:  "tests_run",
+			BaselineFile: testBaselineFile,
 			CanaryFiles: map[string]string{
 				"go.mod":       "module canary\n\ngo 1.24\n",
 				"fail_test.go": "package canary\n\nimport \"testing\"\n\nfunc TestPlanted(t *testing.T) { t.Fatal(\"planted failure\") }\n",
@@ -181,28 +251,31 @@ func registry() []Check {
 		},
 		{
 			ID: "zero-touch-ai", Tier: 1, Desc: "relay cannot reach providers or keys",
-			Inputs: goInputs, Run: checkZeroTouchAI,
+			Inputs: goInputs, Run: checkZeroTouchAI, Budget: time.Minute,
 			CanaryFiles: map[string]string{
 				"internal/server/relay.go": "package server\n\nimport _ \"example.com/canary/internal/models\"\n",
 			},
 		},
 		{
 			ID: "secret-logging", Tier: 1, Desc: "no credentials in log calls",
-			Inputs: goInputs, Run: checkSecretLogging,
+			Inputs: goInputs, Run: checkSecretLogging, Budget: time.Minute,
+			MinEvidence: map[string]int{"files_scanned": 1},
 			CanaryFiles: map[string]string{
 				"leak.go": "package canary\n\nimport \"log/slog\"\n\nfunc F(apiKey string) { slog.Info(\"starting\", apiKey) }\n",
 			},
 		},
 		{
 			ID: "fake-green", Tier: 1, Desc: "tests that assert nothing",
-			Inputs: goInputs, Run: checkFakeGreen,
+			Inputs: goInputs, Run: checkFakeGreen, Budget: time.Minute,
+			MinEvidence: map[string]int{"tests_declared": 1},
 			CanaryFiles: map[string]string{
 				"hollow_test.go": "package canary\n\nimport \"testing\"\n\nfunc TestNothing(t *testing.T) {\n\t_ = 1 + 1\n}\n",
 			},
 		},
 		{
 			ID: "spec-hygiene", Tier: 1, Desc: "spec artifacts are well formed",
-			Inputs: []string{".rla/specs"}, Run: checkSpecHygiene,
+			Inputs: []string{".rla/specs"}, Run: checkSpecHygiene, Budget: 30 * time.Second,
+			MinEvidence: map[string]int{"specs_parsed": 1},
 			CanaryFiles: map[string]string{
 				".rla/specs/mismatch.md": "---\nid: wrong-name\ntitle: Canary\nstatus: ratified\n---\n\n## SPEC-wrong-name-01 — Something\n",
 			},
@@ -211,13 +284,19 @@ func registry() []Check {
 		{
 			ID: "spec-fidelity", Tier: 2, Desc: "every ratified requirement is implemented",
 			Inputs: []string{".rla/specs", "cmd", "internal", "scripts"}, Run: checkSpecFidelity,
+			Budget: time.Minute,
+			// No evidence floor here: zero ratified requirements is a real and
+			// legitimate state before checkpoint ①, and the check already
+			// reports it as COULD NOT VERIFY rather than as a pass. A floor
+			// would relabel "awaiting ratification" as "failed".
 			CanaryFiles: map[string]string{
 				".rla/specs/orphan.md": "---\nid: orphan\ntitle: Canary\nstatus: ratified\n---\n\n## SPEC-orphan-01 — Never implemented\n",
 			},
 		},
 		{
 			ID: "coverage-ratchet", Tier: 2, Desc: "coverage must not regress",
-			Run: checkCoverage,
+			Run: checkCoverage, Budget: 8 * time.Minute,
+			MinEvidence: map[string]int{"functions_measured": 1},
 			CanaryFiles: map[string]string{
 				"go.mod":          "module canary\n\ngo 1.24\n",
 				"x.go":            "package canary\n\nfunc Covered() int { return 1 }\n\nfunc Uncovered() int { return 2 }\n",
@@ -225,10 +304,14 @@ func registry() []Check {
 				coverageFloorFile: "99.0\n",
 			},
 		},
-		{ID: "doc-links", Tier: 2, Desc: "documentation links and anchors", Inputs: []string{"docs", "README.md", "CONTRIBUTING.md"}, Run: checkDocLinks},
+		{
+			ID: "doc-links", Tier: 2, Desc: "documentation links and anchors",
+			Inputs: []string{"docs", "README.md", "CONTRIBUTING.md"}, Run: checkDocLinks,
+			Budget: 2 * time.Minute, MinEvidence: map[string]int{"files_indexed": 1},
+		},
 		{
 			ID: "licence-headers", Tier: 2, Desc: "AGPL headers present",
-			Inputs: goInputs, Run: checkLicenceHeaders,
+			Inputs: goInputs, Run: checkLicenceHeaders, Budget: 2 * time.Minute,
 			CanaryFiles: map[string]string{
 				"LICENSE_HEADER": "Canary\nCopyright (C) {{ .Year }} {{ .Holder }}\n",
 				"cmd/bare.go":    "package main\n\nfunc main() {}\n",
@@ -236,20 +319,27 @@ func registry() []Check {
 		},
 		{
 			ID: "licence-boundary", Tier: 2, Desc: "no AGPL code under mobile/",
-			Inputs: []string{"mobile"}, Run: checkLicenceBoundary,
+			Inputs: []string{"mobile"}, Run: checkLicenceBoundary, Budget: time.Minute,
 			CanaryFiles: map[string]string{
 				"mobile/lib/leak.dart": "// GNU Affero General Public License\nvoid main() {}\n",
 			},
 		},
 
-		{ID: "race", Tier: 3, Desc: "data race detector", Inputs: goInputs, Run: checkRace},
-		{ID: "vulnerabilities", Tier: 3, Desc: "known CVEs in dependencies", Inputs: []string{"go.mod", "go.sum"}, Run: checkVulnerabilities},
+		{ID: "race", Tier: 3, Desc: "data race detector", Inputs: goInputs, Run: checkRace, Budget: 10 * time.Minute},
+		{ID: "vulnerabilities", Tier: 3, Desc: "known CVEs in dependencies", Inputs: []string{"go.mod", "go.sum"}, Run: checkVulnerabilities, Budget: 8 * time.Minute},
 	}
 }
 
 // judgementGates are the parts of the pipeline no script can decide. They are
 // listed rather than silently omitted, because an unlisted obligation is
 // indistinguishable from one that was met.
+//
+// Two rules bound them, and both are cost decisions before they are design
+// ones. A judged pass reads the artifact this command writes and **runs no
+// tools**: re-running what a script already decided costs an order of
+// magnitude more and returns a verdict that is not reproducible. And a judged
+// pass **does not block the iteration** — its output is a report, while the
+// authority to stop the work stays with the exit codes.
 var judgementGates = []string{
 	"backward spec diff — behaviour in the code that no SPEC id covers (Tier 2)",
 	"architectural intent — does the design still match PRINCIPLES.md (Tier 2)",
@@ -260,26 +350,48 @@ var judgementGates = []string{
 
 // ── runners ─────────────────────────────────────────────────────────────────
 
-func runTiers(root string, tiers []int, noCache, verbose bool) int {
+// ratifiedRequirementIDs is the requirement set a cache signature is bound to:
+// ratifying a spec changes what the gates are checking, so it must invalidate
+// their passes.
+func ratifiedRequirementIDs(root string) []string {
 	specs, err := loadSpecs(root)
 	if err != nil {
 		fmt.Printf("⚠️  spec artifacts unreadable: %v\n", err)
-		specs = nil
+		return nil
 	}
-	var specIDs []string
+	var ids []string
 	for _, s := range specs {
-		if s.Active() {
-			for _, r := range s.Requirements {
-				specIDs = append(specIDs, r.ID)
-			}
+		if !s.Active() {
+			continue
+		}
+		for _, r := range s.Requirements {
+			ids = append(ids, r.ID)
 		}
 	}
+	return ids
+}
 
+// runChecks runs one mode and writes the artifact describing it.
+//
+// The artifact is the point. Everything printed here is for the person
+// watching; the file is for the reviewer that comes next, and it is what keeps
+// the judged half from rediscovering the project on every pass.
+//
+// SPEC-deterministic-backbone-01
+func runChecks(root string, mode runMode, noCache, verbose bool) (int, string) {
+	specIDs := ratifiedRequirementIDs(root)
 	cache := loadCache(root)
-	worst := Pass
-	ran := 0
 
-	for _, tier := range tiers {
+	fingerprint, fpErr := treeFingerprint(root, specIDs)
+	if fpErr != nil {
+		fmt.Printf("⚠️  tree fingerprint unavailable: %v\n", fpErr)
+	}
+
+	started := time.Now()
+	worst, ran, cached := Pass, 0, 0
+	var steps []stepRecord
+
+	for _, tier := range mode.Tiers {
 		checks := checksForTier(tier)
 		if len(checks) == 0 {
 			continue
@@ -287,41 +399,150 @@ func runTiers(root string, tiers []int, noCache, verbose bool) int {
 		fmt.Printf("\n\033[1mTier %d\033[0m — %s\n", tier, tierName(tier))
 
 		for _, check := range checks {
-			sig, sigErr := signature(root, check, specIDs)
-			if sigErr == nil && !noCache && sig != "" {
-				if summary, ok := cache.hit(check.ID, sig); ok {
-					report(Result{Name: check.ID, Tier: tier, Status: Pass, Summary: summary, Cached: true}, verbose)
-					continue
-				}
-			}
-
-			start := time.Now()
-			res := check.Run(root)
-			res.Duration = time.Since(start)
-			res.Name = check.ID
-			res.Tier = tier
-			ran++
-
-			if res.Status == Pass && sigErr == nil && sig != "" {
-				cache.store(check.ID, sig, res.Summary)
+			res := runOne(root, check, cache, specIDs, noCache)
+			if res.Cached {
+				cached++
+			} else {
+				ran++
 			}
 			report(res, verbose)
+			steps = append(steps, newStepRecord(res))
 			worst = worsen(worst, res.Status)
 		}
 	}
 
+	elapsed := time.Since(started)
 	if err := cache.save(); err != nil {
 		fmt.Printf("⚠️  cache not saved: %v\n", err)
 	}
 
-	fmt.Printf("\n%s  %d gates run, %d cached\n", worst.icon(), ran, len(checksForTiers(tiers))-ran)
-	return statusExit(worst)
+	deferred := deferredChecks(mode)
+	reportDeferred(mode, deferred)
+
+	fmt.Printf("\n%s  %d gates run, %d cached, %s\n", worst.icon(), ran, cached, elapsed.Round(10*time.Millisecond))
+	reportDrift(root, mode, elapsed)
+
+	artifact := ""
+	if fpErr == nil {
+		var err error
+		artifact, err = writeArtifact(root, runArtifact{
+			Mode:          mode.Name,
+			Fingerprint:   fingerprint,
+			Generated:     time.Now().UTC().Format(time.RFC3339),
+			Verdict:       worst.String(),
+			Exit:          statusExit(worst),
+			DurationMS:    elapsed.Milliseconds(),
+			Steps:         steps,
+			Deferred:      deferred,
+			JudgementOwed: judgementGates,
+		})
+		if err != nil {
+			fmt.Printf("⚠️  evidence artifact not written: %v\n", err)
+		} else {
+			fmt.Printf("    evidence: %s\n", artifact)
+		}
+	}
+
+	return statusExit(worst), artifact
+}
+
+// runOne runs a single gate, or serves a cached pass that still holds up.
+func runOne(root string, check Check, cache *gateCache, specIDs []string, noCache bool) Result {
+	floor := baselineFloor(root, check)
+
+	sig, sigErr := signature(root, check, specIDs)
+	if sigErr == nil && !noCache && sig != "" {
+		if entry, ok := cache.hit(check.ID, sig); ok {
+			if guardsHold(check, entry.Evidence, entry.duration(), floor) {
+				return Result{
+					Name: check.ID, Tier: check.Tier, Status: Pass,
+					Summary: entry.Summary, Evidence: entry.Evidence,
+					Duration: entry.duration(), Cached: true,
+				}
+			}
+			// The signature matched, so nothing this gate reads has changed —
+			// which is precisely how an empty pass becomes permanent. A cached
+			// green whose recorded numbers would fail the guards today is not
+			// a green, and re-running is the only honest response.
+			fmt.Printf("  ⚠️  %-18s cached pass rejected — its recorded evidence no longer clears the guards\n", check.ID)
+		}
+	}
+
+	start := time.Now()
+	res := check.Run(root)
+	res.Duration = time.Since(start)
+	res.Name = check.ID
+	res.Tier = check.Tier
+	res = applyGuards(check, res, floor)
+
+	if res.Status == Pass && sigErr == nil && sig != "" {
+		cache.store(check.ID, sig, res)
+	}
+	return res
+}
+
+// deferredChecks names everything this mode did not run.
+//
+// A check that was skipped and a check that passed look identical in a green
+// summary. Naming the skipped ones is the difference between "the fast layer
+// is green" and "the fast layer is green and says nothing about races".
+func deferredChecks(mode runMode) []deferredRecord {
+	inMode := map[int]bool{}
+	for _, t := range mode.Tiers {
+		inMode[t] = true
+	}
+
+	var out []deferredRecord
+	for _, c := range registry() {
+		if inMode[c.Tier] {
+			continue
+		}
+		out = append(out, deferredRecord{
+			ID:   c.ID,
+			Tier: c.Tier,
+			Reason: fmt.Sprintf("tier %d does not run in %s mode — %s",
+				c.Tier, mode.Name, c.Desc),
+		})
+	}
+	return out
+}
+
+func reportDeferred(mode runMode, deferred []deferredRecord) {
+	if len(deferred) == 0 {
+		return
+	}
+	fmt.Printf("\n\033[1mDeferred\033[0m — not run in %s mode, and therefore unproven:\n", mode.Name)
+	for _, d := range deferred {
+		fmt.Printf("  ·  %-18s (tier %d)\n", d.ID, d.Tier)
+	}
+}
+
+// reportDrift compares this run against the committed measurement.
+//
+// The budget is a ceiling; this is the sensor. A layer that was measured at
+// seconds and now takes half its budget did not get slower by accident —
+// something moved into it, and the tier split stops paying for itself the day
+// nobody notices.
+func reportDrift(root string, mode runMode, elapsed time.Duration) {
+	if mode.Budget <= 0 {
+		return
+	}
+	fmt.Printf("    %s of a %s budget", elapsed.Round(10*time.Millisecond), mode.Budget)
+	if baseline, err := loadTimings(root, timingsBaseline); err == nil {
+		if line, drifted := driftAgainst(baseline, mode.Name, elapsed); line != "" {
+			fmt.Printf(" · %s", line)
+			if drifted {
+				fmt.Print(" ⚠️  drifting — re-measure with `gate timings`")
+			}
+		}
+	}
+	fmt.Println()
 }
 
 func runVerify(root string, noCache, verbose bool) int {
 	fmt.Println("\033[1mFull verification\033[0m — read-only sweep before checkpoint ②")
 
-	code := runTiers(root, []int{0, 1, 2, 3}, noCache, verbose)
+	code, artifact := runChecks(root, modeFull, noCache, verbose)
 
 	// Checkpoint ①: a draft spec means the plan was never agreed, so no amount
 	// of green gates can justify declaring the work ready.
@@ -342,6 +563,11 @@ func runVerify(root string, noCache, verbose bool) int {
 	for _, g := range judgementGates {
 		fmt.Printf("  ·  %s\n", g)
 	}
+	if artifact != "" {
+		fmt.Printf("\n    Hand the reviewer %s. It reads the evidence and runs no tools:\n", artifact)
+		fmt.Println("    re-running what a script already decided costs an order of magnitude more")
+		fmt.Println("    and answers a question that was already answered reproducibly.")
+	}
 
 	fmt.Println()
 	switch {
@@ -360,6 +586,149 @@ func runVerify(root string, noCache, verbose bool) int {
 		fmt.Println("    not \"does the right thing\".")
 	}
 	return code
+}
+
+// reportEvidence is the reviewer's entry point: the artifact for the current
+// working tree, or a refusal.
+//
+// Freshness is decided by fingerprint, not by timestamp. A report about a tree
+// that has since moved on is not weak evidence — it is evidence about
+// something else, and reading it is worse than reading nothing, because it
+// arrives with the authority of a machine-generated file.
+//
+// SPEC-deterministic-backbone-04
+func reportEvidence(root, mode string) int {
+	fingerprint, err := treeFingerprint(root, ratifiedRequirementIDs(root))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cannot fingerprint the working tree: %v\n", err)
+		return exitUnverified
+	}
+
+	artifact, fresh, err := readArtifact(root, mode, fingerprint)
+	if err != nil || !fresh {
+		fmt.Printf("⚠️   no fresh %s artifact for this working tree (fingerprint %s)\n", mode, short(fingerprint))
+		for _, stale := range staleArtifacts(root, mode, fingerprint) {
+			fmt.Printf("     stale: %s — describes a different tree\n", stale)
+		}
+		fmt.Printf("     run `gate %s` first; a judged pass on stale evidence proves nothing.\n", mode)
+		return exitUnverified
+	}
+
+	fmt.Printf("\033[1m%s\033[0m — %s · fingerprint %s · %s\n",
+		filepath.ToSlash(filepath.Join(stateDir, artifactName(mode, fingerprint))),
+		artifact.Verdict, short(artifact.Fingerprint), artifact.Generated)
+
+	for _, s := range artifact.Steps {
+		evidence := ""
+		if len(s.Evidence) > 0 {
+			parts := make([]string, 0, len(s.Evidence))
+			for _, k := range sortedKeys(s.Evidence) {
+				parts = append(parts, fmt.Sprintf("%s=%d", k, s.Evidence[k]))
+			}
+			evidence = "  \033[2m" + strings.Join(parts, " ") + "\033[0m"
+		}
+		fmt.Printf("  %-18s %-18s %s%s\n", s.ID, s.Verdict, s.Summary, evidence)
+	}
+
+	if len(artifact.Deferred) > 0 {
+		names := make([]string, 0, len(artifact.Deferred))
+		for _, d := range artifact.Deferred {
+			names = append(names, d.ID)
+		}
+		fmt.Printf("\n  deferred (unproven): %s\n", strings.Join(names, ", "))
+	}
+
+	fmt.Println("\n  Read this; do not re-run it. The verdict above is an exit code, which is")
+	fmt.Println("  reproducible in a way a second opinion about it would not be.")
+	return artifact.Exit
+}
+
+// staleArtifacts names the reports left over from earlier trees, so a reader
+// who was about to open one is told why not to.
+func staleArtifacts(root, mode, fingerprint string) []string {
+	entries, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(stateDir)))
+	if err != nil {
+		return nil
+	}
+	prefix := fmt.Sprintf("verify-%s-", mode)
+	current := artifactName(mode, fingerprint)
+
+	var out []string
+	for _, e := range entries {
+		if name := e.Name(); strings.HasPrefix(name, prefix) && name != current {
+			out = append(out, filepath.ToSlash(filepath.Join(stateDir, name)))
+		}
+	}
+	return out
+}
+
+// runTimings measures. Every budget and every tier boundary in this file is
+// downstream of these numbers, and the one ordering mistake that cannot be
+// recovered from is setting them the other way round — deciding what a tier
+// should cost and then never checking what it does.
+//
+// SPEC-deterministic-backbone-05
+func runTimings(root string, record bool) int {
+	fmt.Println("\033[1mTimings\033[0m — measured wall clock, cache bypassed")
+
+	measured := timings{
+		Measured: time.Now().UTC().Format(time.RFC3339),
+		Modes:    map[string]int64{},
+		Checks:   map[string]timingRecord{},
+	}
+	byCheck := map[string]time.Duration{}
+
+	for _, check := range registry() {
+		start := time.Now()
+		res := check.Run(root)
+		elapsed := time.Since(start)
+
+		byCheck[check.ID] = elapsed
+		measured.Total += elapsed.Milliseconds()
+		measured.Checks[check.ID] = timingRecord{Milliseconds: elapsed.Milliseconds(), Verdict: res.Status.String()}
+		if res.Status == Unverified {
+			// A check that could not run contributes almost nothing to the
+			// clock. Recording that silently would make the first complete run
+			// on a full toolchain look like drift.
+			measured.Unmeasured = append(measured.Unmeasured, check.ID)
+		}
+
+		note := ""
+		if check.Budget > 0 && elapsed > check.Budget {
+			note = fmt.Sprintf("  ⚠️  over its %s budget", check.Budget)
+		}
+		fmt.Printf("  %-18s %8s   %s%s\n", check.ID, elapsed.Round(time.Millisecond), res.Status, note)
+	}
+
+	for _, mode := range []runMode{modeFast, modeFull} {
+		total := time.Duration(0)
+		for _, tier := range mode.Tiers {
+			for _, c := range checksForTier(tier) {
+				total += byCheck[c.ID]
+			}
+		}
+		measured.Modes[mode.Name] = total.Milliseconds()
+		fmt.Printf("\n  %-6s %8s of a %s budget (%.0f%%)\n",
+			mode.Name, total.Round(time.Millisecond), mode.Budget,
+			float64(total)/float64(mode.Budget)*100)
+	}
+
+	if err := saveTimings(root, filepath.ToSlash(filepath.Join(stateDir, "tool-timings.json")), measured); err != nil {
+		fmt.Printf("⚠️  measurement not saved: %v\n", err)
+		return exitUnverified
+	}
+
+	if !record {
+		fmt.Printf("\n  Written to %s/tool-timings.json. Pass -record to make it the committed\n", stateDir)
+		fmt.Printf("  baseline in %s — that is a deliberate act, like lowering the coverage floor.\n", timingsBaseline)
+		return exitOK
+	}
+	if err := saveTimings(root, timingsBaseline, measured); err != nil {
+		fmt.Printf("⚠️  baseline not written: %v\n", err)
+		return exitUnverified
+	}
+	fmt.Printf("\n  Baseline recorded in %s — commit it; drift is measured against it.\n", timingsBaseline)
+	return exitOK
 }
 
 // runCanary deliberately takes no root: every canary runs against a freshly
@@ -483,14 +852,6 @@ func checksForTier(tier int) []Check {
 		if c.Tier == tier {
 			out = append(out, c)
 		}
-	}
-	return out
-}
-
-func checksForTiers(tiers []int) []Check {
-	var out []Check
-	for _, t := range tiers {
-		out = append(out, checksForTier(t)...)
 	}
 	return out
 }

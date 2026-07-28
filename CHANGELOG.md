@@ -12,6 +12,32 @@ The wire protocol is versioned separately from the software — see [`docs/proto
 
 Pre-release. No published version yet.
 
+### Method change — 2026-07-28 · the deterministic backbone
+
+The pipeline is now split by **who decides**, not only by how often a check runs ([ADR-027](docs/decisions.md#adr-027--a-deterministic-verdict-is-an-exit-code-and-judgement-reads-it), [ADR-028](docs/decisions.md#adr-028--counts-are-evidence-and-every-convenience-buys-a-guard)). A measurement forced it: on the codebase where this method was first run by hand, the deterministic pass took **~2 minutes**, the same tools invoked through a model took **10–21 minutes per gate**, and a 41-gate round took roughly **nine hours** without producing a verdict — because the model reported its own opinion rather than the tool's exit code, and the same unchanged code passed one round and failed the next.
+
+#### Added
+
+- **`gate fast` / `gate full`** — modes as the unit of running, tiers retained as classification. Both name every check they deferred; a skipped gate and a passing one must not read the same.
+- **Evidence artifact** — `.rla/state/verify-<mode>-<fingerprint>.json`: per step the verdict, exit code, duration, cache status, evidence counts, guard results, plus deferrals and the obligations owed to judgement. `gate evidence` serves it for the current tree, or refuses and names the stale reports it declined.
+- **Guards on the counts** — empty-run floors, a test-count ratchet in `.rla/test-baseline.txt`, per-step wall-clock budgets, and cache hits re-judged against their recorded evidence. A guard may worsen a verdict, never improve one.
+- **`gate timings [-record]`** — measured wall clock, baseline committed in `.rla/tool-timings.json`, drift reported on every run. `fast` measures 5.8 s against a 2 min ceiling; `full` 10.4 s against 30 min.
+- [`deterministic-backbone`](.rla/specs/deterministic-backbone.md) spec (draft, P0.19) — ① awaiting ratification.
+- **P14** in `PRINCIPLES.md`: a deterministic verdict is an exit code, and judgement reads it.
+
+#### Changed
+
+- **The judged half now reads evidence and runs no tools**, once at a defined trigger, and reports rather than blocks a round. `gate verify` prints the artifact path beside the obligations it still owes.
+- **The cache stores evidence, not only a summary.** The files that make a suite run zero tests never change, so a signature-only cache serves that empty pass indefinitely — the cache was where a silent green became permanent.
+- `go test` now runs with `-json -count=1`: a cached package emits no per-test events, and a warm cache would have looked like a suite that vanished.
+- CI runs `canary → fast → t2` and prints the artifact; `make fast|full|evidence|timings` added on both Make and PowerShell.
+
+#### Deliberately not ported
+
+The upstream guard for *collection errors* was dropped and its weight moved to the baseline ratchet. In Go a package that will not build makes `go test` exit non-zero, so that guard could never fire; what Go hides instead is erosion — 70 tests becoming 50 while every remaining one passes. Porting the list verbatim would have added a dead check and omitted a live one.
+
+---
+
 ### Thesis change — 2026-07-27
 
 The product is now a **multi-model cross-verification system**, not a mobile-controlled coding agent ([ADR-013](docs/decisions.md#adr-013--the-product-is-cross-verification-not-an-agent)). Three findings forced it, in order:

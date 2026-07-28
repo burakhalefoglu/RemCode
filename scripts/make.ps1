@@ -109,6 +109,10 @@ function Target-Help {
         'tools'         = 'Install dev tooling (addlicense, golangci-lint)'
         'og-image'      = 'Export docs/og-image.svg -> og-image.png'
         'docs'          = 'Verify every relative doc link and heading anchor'
+        'fast'          = 'Tiers 0-1 - after every change (measured: 5.8s)'
+        'full'          = 'Tiers 0-3 - at convergence (measured: 10.4s)'
+        'evidence'      = 'The run artifact a review pass reads instead of re-running'
+        'timings'       = 'Measure every gate wall clock (-record sets the baseline)'
         't0'            = 'Tier 0 - format, compile, vet (after every edit)'
         't1'            = 'Tier 1 - lint, tests, conformance, fake-green'
         't2'            = 'Tier 2 - coverage, spec fidelity, licences'
@@ -275,6 +279,10 @@ function Invoke-Gate([string]$Command) {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
+function Target-Fast     { Invoke-Gate 'fast' }
+function Target-Full     { Invoke-Gate 'full' }
+function Target-Evidence { Invoke-Gate 'evidence' }
+function Target-Timings  { Invoke-Gate 'timings' }
 function Target-T0     { Invoke-Gate 't0' }
 function Target-T1     { Invoke-Gate 't1' }
 function Target-T2     { Invoke-Gate 't2' }
@@ -326,6 +334,10 @@ switch ($Target.ToLowerInvariant()) {
     'tools'         { Target-Tools }
     'og-image'      { Target-OgImage }
     'docs'          { Target-Docs }
+    'fast'          { Target-Fast }
+    'full'          { Target-Full }
+    'evidence'      { Target-Evidence }
+    'timings'       { Target-Timings }
     't0'            { Target-T0 }
     't1'            { Target-T1 }
     't2'            { Target-T2 }

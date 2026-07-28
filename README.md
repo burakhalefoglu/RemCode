@@ -21,7 +21,7 @@ You approve a **module** — what you want, in your own words, with criteria any
 | What | State |
 | :--- | :--- |
 | Architecture, protocol, threat model, decisions | ✅ [`docs/`](docs/) |
-| **Verification gates** — tiers, spec fidelity, canaries | ✅ **Working** — `go run ./scripts/gate verify` |
+| **Verification gates** — modes, guards, evidence artifact, canaries | ✅ **Working** — `go run ./scripts/gate verify` |
 | Repo scaffolding, CI, licence automation | ✅ In place |
 | Orchestrator, relay, mobile app | 🚧 Not started — [P1–P4](docs/roadmap.md) |
 

@@ -73,7 +73,7 @@ jobs:
           version: latest
 
   loop-gate:
-    name: loop gate (canary + T0–T2)
+    name: loop gate (canary + fast + T2)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -93,14 +93,19 @@ jobs:
       - name: Canary — can the gates still detect breakage?
         run: go run ./scripts/gate canary
 
-      - name: Tier 0 — format, compile, vet
-        run: go run ./scripts/gate t0
-
-      - name: Tier 1 — lint, tests, conformance, fake-green
-        run: go run ./scripts/gate t1
+      # `fast` is tiers 0–1 and names every check it deferred, so the log shows
+      # what this step does not cover rather than implying it covers everything.
+      - name: Fast — tiers 0–1, and the guards on their counts
+        run: go run ./scripts/gate fast
 
       - name: Tier 2 — coverage ratchet, spec fidelity, licences
         run: go run ./scripts/gate t2
+
+      # The artifact each run writes is what a review pass reads instead of
+      # re-running the gates. Printing it here keeps that contract visible.
+      - name: Evidence artifact (informational)
+        if: always()
+        run: go run ./scripts/gate evidence -mode fast || true
 
       # Tier 3's race detector is covered by the Linux leg of the test matrix.
       # `verify` is deliberately NOT run here: its job is to declare

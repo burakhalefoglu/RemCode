@@ -11,7 +11,7 @@ Everything here is public and current. `index.html` in this directory is the lan
 | Document | What it answers |
 | :--- | :--- |
 | [**decisions.md**](decisions.md) | *Why is it like this?* The ADR log. Read before proposing a change to naming, licensing, encryption or scope — several entries record decisions that were reversed by research, and why. |
-| [**loop-engineering.md**](loop-engineering.md) | *What is the product?* The verification method: tiers, spec fidelity, cross-model review, canaries, fake-green. |
+| [**loop-engineering.md**](loop-engineering.md) | *What is the product?* The verification method: modes and tiers, guards on the counts, the evidence artifact, spec fidelity, cross-model review, canaries, fake-green. |
 | [**roadmap.md**](roadmap.md) | *What is being built, in what order?* P0–P4 and M1. |
 | [**architecture.md**](architecture.md) | *How does it fit together?* Orchestrator, ACP agents, relay, mobile. |
 

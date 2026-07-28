@@ -1,6 +1,6 @@
 # 📌 Architecture Decision Log
 
-> **Status:** Living document · **Last updated:** 2026-07-27
+> **Status:** Living document · **Last updated:** 2026-07-28
 > Every entry here is **locked**. Changing one requires a new entry that supersedes it — never edit history in place.
 
 This log exists because several early decisions (naming, licensing, scope) are *expensive to reverse once code and contributors exist*. They are recorded here so that neither the maintainer nor a future contributor has to re-litigate them.
@@ -33,6 +33,8 @@ This log exists because several early decisions (naming, licensing, scope) are *
 | [ADR-024](#adr-024--silence-is-attested-not-assumed) | Silence is attested — the heartbeat is P11's second and final exception | Locked | ✅ Easy |
 | [ADR-025](#adr-025--every-invariant-declares-the-criterion-it-derives-from) | Invariants declare their parent criterion — **replaces [ADR-020](#adr-020--three-checkpoints-and-the-middle-one-is-conditional)'s second escalation test** | Locked | ⚠️ Medium |
 | [ADR-026](#adr-026--the-hierarchy-relocates-the-blind-spot-it-does-not-remove-it) | The hierarchy relocates the blind spot; ⓪ gets an adversarial completeness pass | Locked | ✅ Easy |
+| [ADR-027](#adr-027--a-deterministic-verdict-is-an-exit-code-and-judgement-reads-it) | Deterministic verdicts are exit codes; judgement reads the artifact, reports, never blocks a round | Locked | ⚠️ Medium |
+| [ADR-028](#adr-028--counts-are-evidence-and-every-convenience-buys-a-guard) | Counts are evidence; guards are the price of caching, tiering and deferral | Locked | ⚠️ Medium |
 
 ---
 
@@ -587,3 +589,37 @@ It is worse than a symmetry argument suggests, because the module draft is writt
 **Rationale.** It cannot be closed — nothing can prove a person wanted something they did not say. But it is currently not pressured at all, and the machinery already exists: the verifier objects to criterion *quality* at draft time ([SPEC-module-layer-04](../.rla/specs/module-layer.md)). Pointing the same pass at *completeness* is a small change to an existing step.
 
 **Consequences.** The claim in the public copy changes from elimination to relocation, with the reason it is still worth it: **a missing criterion costs a conversation at ⓪; a missing spec costs a rebuild.** The blind spot moves to the cheapest place to have one. That is a real win and it survives being stated accurately, which is the test any claim in this repository has to pass.
+
+---
+
+## ADR-027 — A deterministic verdict is an exit code, and judgement reads it
+
+**Decision.** Every check whose output is an exit code belongs to the script, runs as one of two modes (`fast`, `full`) and writes one machine-readable artifact. Every check requiring judgement **reads that artifact and runs no tools**, runs **once at a defined trigger**, and **reports rather than blocks**. Blocking authority stays with the exit codes and with the readiness verdict.
+
+**Context.** The method's earlier shape gave each gate to a model that invoked the deterministic tools itself. Measured on the codebase where it was first run by hand: the complete deterministic pass took **~2 minutes**; the same work through a model took **10–21 minutes per gate**; one round of 41 gate runs took roughly **nine hours** and produced no verdict.
+
+Two causes, and neither of them was verification. **Context rediscovery** — nearly all of a gate's time went to working out again which tool to run and why, relearning the project every round. **Judgement production** — the gate reported its own opinion instead of the tool's exit code, and the same unchanged code passed one round and failed the next, four times over.
+
+**Rationale.** The second cause is the fatal one. *"Iterate until everything is green"* has no terminating condition in a system where green is not stable, so the loop cannot converge — not slowly, but never. Determinism is not merely cheaper here; it is what makes the stopping rule exist.
+
+Reading is also the fix for the first cause. The artifact hands a reviewer what ran and what it saw, which is precisely the context it was previously paying to rediscover.
+
+**Consequences.** `scripts/gate` gains `fast`, `full`, `evidence` and `timings`; tiers stay as classification while modes become the unit of running. `gate verify` prints the artifact path with the review obligations, so the reading contract is visible at the point it applies. Judged gates keep their design authority from [ADR-023](#adr-023--a-judged-gate-may-add-a-finding-never-clear-one) — accuse, never absolve — and gain a second bound: they may not block a round.
+
+The regression to watch for is stated in [`loop-engineering.md`](loop-engineering.md#self-audit--the-three-numbers) as **backbone leakage**: a review pass calling `go test`. It always arrives disguised as convenience, and it restores both the cost and the instability in one step.
+
+---
+
+## ADR-028 — Counts are evidence, and every convenience buys a guard
+
+**Decision.** Every gate reports how much it examined — tests run, files scanned, requirements checked — and those counts are held to declared floors, to a committed baseline, and to a step budget. Guards may worsen a verdict and never improve one. A **cache hit is re-judged against its recorded counts**, and an evidence artifact is served only when its fingerprint matches the working tree.
+
+**Context.** An exit code answers *"did what ran pass?"* and cannot answer *"did anything run?"*. Both silent greens found in the field were the second kind: a suite selecting **zero tests** while exiting 0, and a collection error dropping **all 18,034 tests** behind calm-looking output. Neither was caught by a gate; both were caught by someone eventually looking at a number.
+
+**Rationale.** Every speed decision in this pipeline — caching, tier splitting, deferring a check to a later mode — trades certainty for time. Each is defensible only while the counts are still checked, which makes guards the price of the speed rather than an addition to it. It follows that the loop must not be able to edit them: a loop that can delete the price gets the convenience free, and the system reverts silently to the state that made the guards necessary. They join the coverage floor under [P5](../.rla/PRINCIPLES.md#p5--gates-are-immutable-to-the-loop).
+
+The cache is the sharpest case. The files that make a suite run zero tests do not change, so the signature keeps matching and the empty pass is served indefinitely — a cache is where a silent green goes to become permanent. Storing the evidence beside the verdict is what lets a hit expire.
+
+**Consequences — and one deliberate divergence.** The guard list was **not** ported verbatim. The original guards collection errors separately because a Python collection failure can drop a suite quietly; in Go a package that will not build makes `go test` exit non-zero, so that guard could never fire here. What Go *does* hide is erosion — 70 tests becoming 50 while every remaining one passes — so the ratchet in `.rla/test-baseline.txt` carries that weight instead. Copying the list unexamined would have added a dead check and omitted a live one.
+
+Two costs are accepted. The suite runs with `-count=1`, forgoing Go's own test cache, because a cached package emits no per-test events and would look like a suite that vanished. And the test baseline counts subtests, so splitting a table test into cases requires the ratchet to move — a mildly annoying and entirely visible act, which is the correct direction for that annoyance to point.

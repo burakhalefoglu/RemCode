@@ -1,6 +1,6 @@
 # 🔁 How we work — the development loop
 
-> **Status:** active · **Updated:** 2026-07-27
+> **Status:** active · **Updated:** 2026-07-28
 > The working method for **building RemLinkAgent** — which is also, since
 > [ADR-013](decisions.md#adr-013--the-product-is-cross-verification-not-an-agent),
 > **the product itself**. The full specification is [`loop-engineering.md`](loop-engineering.md).
@@ -10,7 +10,7 @@ model. Building it any other way would be an odd thing to do — so it runs on
 this repository first, and we find out where it is annoying before anyone else
 has to.
 
-**What runs here today is the spec layer and the deterministic gates.** The
+**What runs here today is the spec layer and the deterministic backbone.** The
 module layer above it — business-language intent, `MOD-K` criteria and the
 [Tier M](decisions.md#adr-019--three-intent-gates-and-a-module-document-the-loop-cannot-write)
 gates M1/M2/M3 — is designed ([`module-layer.md`](../.rla/specs/module-layer.md))
@@ -20,21 +20,23 @@ M2 exists to close: everything can be green while a part of what was wanted was
 never specified. Stated rather than hidden.
 
 The cross-model half is [P1](roadmap.md#p1--orchestrator) too; until it lands,
-those passes are run by hand.
+those passes are run by hand — reading the evidence artifact, never re-running
+the tools ([ADR-027](decisions.md#adr-027--a-deterministic-verdict-is-an-exit-code-and-judgement-reads-it)).
 
 Everything here **runs today**:
 
 ```bash
-go run ./scripts/gate t0        # after every edit        — seconds
-go run ./scripts/gate t1        # every fix iteration     — ~10s
-go run ./scripts/gate t2        # at convergence          — ~30s
-go run ./scripts/gate t3        # candidate-complete      — minutes
-go run ./scripts/gate verify    # before you test by hand
+go run ./scripts/gate fast      # after every change      — 5.8s measured
+go run ./scripts/gate full      # at convergence          — 10.4s measured
+go run ./scripts/gate verify    # full + checkpoint ①, before you test by hand
+go run ./scripts/gate evidence  # the artifact a reviewer reads instead of re-running
+go run ./scripts/gate timings   # measure the wall clock; -record sets the baseline
 go run ./scripts/gate canary    # prove the gates still work
 go run ./scripts/gate spec      # what is ratified, what is not
+go run ./scripts/gate t0…t3     # one tier at a time, when that is what you want
 ```
 
-`make t0` … `make verify` wrap these. On Windows: `.\scripts\make.ps1 t0`.
+`make fast` … `make verify` wrap these. On Windows: `.\scripts\make.ps1 fast`.
 
 ---
 
@@ -50,21 +52,21 @@ go run ./scripts/gate spec      # what is ratified, what is not
               │     └────────┬─────────┘
               │              ▼
               │     ┌──────────────────┐   red
-              │     │  T0  seconds     │───────┐
-              │     └────────┬─────────┘       │
-              │       green  ▼                 │
-              │     ┌──────────────────┐   red │
-              └─────│  T1  ~10s        │───────┤
+              └─────│  fast   ~6s      │───────┐
+                    │  tiers 0–1       │       │
                     └────────┬─────────┘       │
                       green  ▼                 │
                     ┌──────────────────┐   red │
-                    │  T2  ~30s        │───────┤
-                    └────────┬─────────┘       │
-                      green  ▼                 │
-                    ┌──────────────────┐   red │
-                    │  T3  minutes     │───────┘
+                    │  full   ~10s     │───────┘
+                    │  tiers 0–3       │
                     └────────┬─────────┘
                       green  ▼
+                    ┌──────────────────┐
+                    │  judged pass     │  reads .rla/state/verify-*.json
+                    │  reports, never  │  runs no tools, blocks nothing
+                    │  blocks          │
+                    └────────┬─────────┘
+                             ▼
                     ┌──────────────────┐
                     │  verify          │
                     └────────┬─────────┘
@@ -72,9 +74,14 @@ go run ./scripts/gate spec      # what is ratified, what is not
                     ② HUMAN TESTS IT
 ```
 
-Iteration budgets are the same as the product design: **T1 generously (20–30
-attempts)** because it is cheap, **T3 tightly (2–3)** because it is not. Hitting
-the T3 limit means stop and think, not try harder.
+**Modes are what you run; tiers are how checks are classified.** `fast` is the
+one you invoke constantly, and it stays cheap because tiers 2 and 3 are not in
+it — which it says out loud at the end of every run, by name.
+
+Iteration budgets are the same as the product design: **`fast` generously
+(20–30 attempts)** because it is cheap, **the heavy steps in `full` tightly
+(2–3)** because they are not. Hitting the tight limit means stop and think, not
+try harder.
 
 ---
 
@@ -84,7 +91,7 @@ the T3 limit means stop and think, not try harder.
 | :--- | :--- | :--- |
 | **0** | `gofmt` · `build` · `vet` | Doesn't compile, isn't formatted |
 | **1** | `lint` | golangci-lint, including `nilerr` and `errcheck` |
-| | `tests` | Unit tests |
+| | `tests` | Unit tests — **and how many of them ran** |
 | | `zero-touch-ai` | **Relay importing provider, agent, tool or crypto code** |
 | | `secret-logging` | Credential-shaped identifiers passed to log calls |
 | | `fake-green` | Tests that assert nothing |
@@ -121,6 +128,79 @@ You will see it on Windows: the race detector needs cgo, so `t3` reports
 
 ---
 
+## Guards — what the exit code cannot say
+
+`go test ./...` exits 0 when the suite passes. It also exits 0 when the suite
+is empty. Every gate therefore reports **counts**, and the counts are held to
+declared floors ([ADR-028](decisions.md#adr-028--counts-are-evidence-and-every-convenience-buys-a-guard)):
+
+| Guard | Trips when | Result |
+| :--- | :--- | :--- |
+| **empty-run** | A gate declaring a floor examined less than it — 0 files scanned, 0 tests run | 🔴 |
+| **unreported count** | A gate declares a floor and reports no number at all | ⚠️ |
+| **baseline** | `tests_run` fell below [`.rla/test-baseline.txt`](../.rla/test-baseline.txt) | 🔴 |
+| **step-budget** | A step exceeded the wall clock declared in its definition | 🔴 |
+| **cached evidence** | A cache hit whose stored counts would fail the guards today | Hit rejected, gate re-runs |
+| **stale artifact** | The report's fingerprint no longer matches the working tree | Not served |
+
+**The baseline is a ratchet, like the coverage floor.** It may rise freely;
+a fall is a deliberate, reviewable commit. That guard exists because
+`go test` already exits non-zero when a package will not build — the loud case
+is covered — while a suite eroding from 70 tests to 50 with everything still
+green is invisible to every other gate here.
+
+**Guards may only worsen a verdict.** A large count never rehabilitates a gate
+that found a problem — the same rule the judged gates follow
+([ADR-023](decisions.md#adr-023--a-judged-gate-may-add-a-finding-never-clear-one)),
+one layer down.
+
+---
+
+## The evidence artifact
+
+Every run writes `.rla/state/verify-<mode>-<fingerprint>.json`: per step, the
+verdict, exit code, duration, cache status, evidence counts and guard results —
+plus every check the mode deferred, and the obligations still owed to
+judgement.
+
+```bash
+go run ./scripts/gate evidence            # the full-mode artifact for this tree
+go run ./scripts/gate evidence -mode fast
+```
+
+**This is what a review pass reads.** It does not re-run the gates: re-running
+a decided question costs an order of magnitude more and answers it less
+reliably, because a model's verdict on the same unchanged input is not stable.
+
+**Freshness is a fingerprint, not a timestamp.** Edit anything and `evidence`
+refuses, naming the stale reports it declined to serve. A judged pass over a
+report about a different tree proves nothing while looking like proof.
+
+---
+
+## Measured, not estimated
+
+```bash
+go run ./scripts/gate timings          # measure; writes .rla/state/
+go run ./scripts/gate timings -record  # promote it to the committed baseline
+```
+
+The committed baseline is [`.rla/tool-timings.json`](../.rla/tool-timings.json);
+recording a new one is deliberate, like lowering the coverage floor. Every run
+prints its measured duration against both its mode budget and that baseline,
+and says so when the two have drifted well apart.
+
+The budgets — 2 minutes for `fast`, 30 for `full` — are ceilings set *after*
+measuring 5.8 s and 10.4 s. A measurement climbing towards its ceiling is the
+signal that something expensive moved into a layer meant to stay cheap.
+
+The baseline names the four checks that could not run on the machine that
+recorded it (`lint`, `licence-headers`, `race`, `vulnerabilities` — the tools
+are not installed locally). A measurement that hid its own gaps would report
+the first complete run as a regression.
+
+---
+
 ## Specs and checkpoint ①
 
 Anything beyond a bug fix starts with a spec in `.rla/specs/<feature>.md`
@@ -145,7 +225,7 @@ Then code cites the id:
 func (c *Client) probeToolSchema(...) { … }
 ```
 
-**`gate t2 → spec-fidelity` fails until every ratified requirement is cited.**
+**`gate full → spec-fidelity` fails until every ratified requirement is cited.**
 It also fails on a citation of an id no spec declares — a typo, or a
 requirement deleted while its marker stayed behind. Both are drift.
 
@@ -174,17 +254,25 @@ unlisted obligation looks exactly like a met one:
 | **Interface test** — checkpoint ② | Human |
 
 Today these passes are run by whoever is at the keyboard with an agent, using
-the prompts in [`loop-engineering.md`](loop-engineering.md). [P1](roadmap.md#p1--orchestrator)
-automates them by handing the diff, the spec and the gate output to a **different
-vendor's** model. The obligation is identical either way; only the automation
-changes — which is exactly why doing it by hand first was worth the effort.
+the prompts in [`loop-engineering.md`](loop-engineering.md). Two rules apply
+whether a human or [P1](roadmap.md#p1--orchestrator) drives them:
+
+**The pass reads the artifact and runs no tools.** Hand it
+`.rla/state/verify-full-<fingerprint>.json`, the diff and the spec. A reviewer
+that starts running `go test` has moved deterministic work back into the
+expensive, non-reproducible half.
+
+**The pass reports; it does not block.** Blocking authority stays with the exit
+codes and with `verify`. That is what lets judgement run **once**, at
+convergence, instead of on every round — which is the difference between a
+review pass and a nine-hour one.
 
 ---
 
 ## Gate integrity
 
 The loop is rewarded for green gates, which creates a standing incentive to
-weaken one rather than fix the code. Three defences:
+weaken one rather than fix the code. Four defences:
 
 **Definitions are compiled.** They live in `scripts/gate/main.go`, not a config
 file. Weakening a gate is a code change that shows up in review.
@@ -201,18 +289,30 @@ Four gates have no canary — `lint`, `doc-links`, `race`, `vulnerabilities`.
 They wrap well-established external tools whose own correctness we take on
 trust. That is a defensible position, and it is stated rather than hidden.
 
-**The coverage ratchet.** `.rla/coverage-floor.txt` may rise freely; a drop
-below it (beyond 0.5% rounding slack) fails the gate. Lowering it is a
-deliberate, reviewable commit — never a side effect.
+**The ratchets.** [`.rla/coverage-floor.txt`](../.rla/coverage-floor.txt) and
+[`.rla/test-baseline.txt`](../.rla/test-baseline.txt) may rise freely; a drop
+below either fails its gate. Lowering one is a deliberate, reviewable commit —
+never a side effect.
+
+**Guards are not editable either.** Floors, budgets and baselines are the price
+of the conveniences elsewhere in the pipeline. A loop that can delete the price
+gets the convenience for free, and the system reverts to the state that made
+these guards necessary.
 
 ---
 
 ## The cache
 
-A passing gate signs the content hash of its declared inputs plus the ratified
-requirement set plus the gate version. Unchanged next round → skipped.
+A passing gate signs the content hash of its declared inputs, the ratified
+requirement set, the gate version — **and the evidence it produced**.
+Unchanged next round → skipped.
 
 Only passes are cached. Failures and `COULD NOT VERIFY` always re-run.
+
+**A hit is re-judged, not trusted.** Storing the counts is what makes a stale
+silent green expire: the files that make a suite run zero tests never change,
+so the signature keeps matching for ever. A hit whose recorded numbers would
+fail the guards today is discarded and the gate runs again, saying so.
 
 **`git commit` invalidates nothing** — committing does not change what a gate
 read, so cache keys hash working-tree content and never a commit SHA. A cache
@@ -223,8 +323,8 @@ that just got stricter must not be skipped on the strength of an older, weaker
 run.
 
 ```bash
-go run ./scripts/gate t2 -no-cache    # force
-go run ./scripts/gate clear-cache     # discard
+go run ./scripts/gate full -no-cache    # force
+go run ./scripts/gate clear-cache       # discard
 ```
 
 ---
@@ -238,14 +338,13 @@ go run ./scripts/gate spec                # shows it as ① awaiting ratificatio
 
 #   ① read it. Is the PLAN right? Then: status: ratified
 
-go run ./scripts/gate t2                  # red — nothing implements it yet
+go run ./scripts/gate full                # red — nothing implements it yet
 
 # … implement, citing SPEC-my-feature-NN in the code …
 
-go run ./scripts/gate t0                  # after each edit
-go run ./scripts/gate t1                  # each iteration
-go run ./scripts/gate t2                  # at convergence
-go run ./scripts/gate t3                  # when candidate-complete
+go run ./scripts/gate fast                # after every change — seconds
+go run ./scripts/gate full                # at convergence
+go run ./scripts/gate evidence            # hand this to the review pass
 go run ./scripts/gate verify              # → READY FOR INTERFACE TEST
 
 #   ② use it. Does it actually work?
@@ -274,8 +373,8 @@ principle quietly bent once is a principle that no longer exists.
 
 ## In CI
 
-`ci-go.yml → loop-gate` runs `canary` then tiers 0–2 on every PR, with tier 3's
-race detector covered by the Linux test matrix.
+`ci-go.yml → loop-gate` runs `canary` then `fast`, then tier 2, on every PR,
+with tier 3's race detector covered by the Linux test matrix.
 
 CI deliberately does **not** run `verify`: that command's job is to declare
 human-readiness, and it fails while any spec is `draft` — which is the correct

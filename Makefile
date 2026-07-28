@@ -203,6 +203,22 @@ docs: ## Verify every relative doc link and heading anchor resolves
 
 # ── Loop Engineering gates (docs/development-loop.md) ────────────────────────
 
+.PHONY: fast
+fast: ## Tiers 0–1 — after every change (measured: 5.8s)
+	go run ./scripts/gate fast
+
+.PHONY: full
+full: ## Tiers 0–3 — at convergence (measured: 10.4s)
+	go run ./scripts/gate full
+
+.PHONY: evidence
+evidence: ## The run artifact a review pass reads instead of re-running the gates
+	go run ./scripts/gate evidence
+
+.PHONY: timings
+timings: ## Measure every gate's wall clock (-record promotes it to the baseline)
+	go run ./scripts/gate timings
+
 .PHONY: t0
 t0: ## Tier 0 — format, compile, vet (after every edit)
 	go run ./scripts/gate t0

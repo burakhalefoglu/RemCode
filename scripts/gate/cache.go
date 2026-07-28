@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 // gateVersion is the configuration signature. Bump it whenever a check's
@@ -39,9 +40,23 @@ const cachePath = ".rla/cache/gates.json"
 // The signature is computed from working-tree content, never from a commit
 // SHA: `git commit` does not change what the gate read, so it must not
 // invalidate anything.
+//
+// Evidence is stored alongside the verdict because a signature alone cannot
+// tell a real pass from an empty one. The files that make a suite run zero
+// tests do not change, so the signature keeps matching and the empty pass is
+// served for ever. Recording the counts lets a hit be re-judged instead of
+// trusted.
+//
+// SPEC-deterministic-backbone-03
 type cacheEntry struct {
-	Signature string `json:"signature"`
-	Summary   string `json:"summary"`
+	Signature  string   `json:"signature"`
+	Summary    string   `json:"summary"`
+	Evidence   Evidence `json:"evidence,omitempty"`
+	DurationMS int64    `json:"duration_ms,omitempty"`
+}
+
+func (e cacheEntry) duration() time.Duration {
+	return time.Duration(e.DurationMS) * time.Millisecond
 }
 
 type gateCache struct {
@@ -79,19 +94,25 @@ func (c *gateCache) save() error {
 	return os.WriteFile(path, append(body, '\n'), 0o600)
 }
 
-// hit reports the cached summary when the signature still matches.
-func (c *gateCache) hit(id, signature string) (string, bool) {
+// hit reports the cached pass when the signature still matches. Whether that
+// pass may be *used* is a separate question, answered by the guards.
+func (c *gateCache) hit(id, signature string) (cacheEntry, bool) {
 	e, ok := c.entries[id]
 	if !ok || e.Signature != signature {
-		return "", false
+		return cacheEntry{}, false
 	}
-	return e.Summary, true
+	return e, true
 }
 
-// store records a pass. Failures and unverified results are never cached —
-// they must be re-run until they genuinely pass.
-func (c *gateCache) store(id, signature, summary string) {
-	c.entries[id] = cacheEntry{Signature: signature, Summary: summary}
+// store records a pass together with what it saw. Failures and unverified
+// results are never cached — they must be re-run until they genuinely pass.
+func (c *gateCache) store(id, signature string, res Result) {
+	c.entries[id] = cacheEntry{
+		Signature:  signature,
+		Summary:    res.Summary,
+		Evidence:   res.Evidence,
+		DurationMS: res.Duration.Milliseconds(),
+	}
 	c.dirty = true
 }
 

@@ -1,6 +1,6 @@
 # 🗺️ RemLinkAgent — Roadmap
 
-> **Version:** 8.0 · **Updated:** 2026-07-27 · **Status:** P0 finishing, P1 next
+> **Version:** 8.1 · **Updated:** 2026-07-28 · **Status:** P0 finishing, P1 next
 > **Thesis:** Agentic Project Management — a control room, not a chat window. You approve a **module** in business language; agents write the specs and the code; a *different* model tries to break it; gates produce evidence. The human is **not involved** in between. See [ADR-018](decisions.md#adr-018--the-primitive-unit-is-a-module-and-intent-is-a-hierarchy), [ADR-015](decisions.md#adr-015--the-humans-default-state-is-non-involvement), [ADR-020](decisions.md#adr-020--three-checkpoints-and-the-middle-one-is-conditional).
 > **Reference design:** [`design/mobile-v2.html`](../design/mobile-v2.html)
 
@@ -167,7 +167,18 @@ Detail: [`architecture.md`](architecture.md) · Wire formats: [`protocol.md`](pr
 - [x] **0.13** Canaries — every gate proves it detects planted breakage.
 - [x] **0.14** Fake-green detection; `COULD NOT VERIFY` as a first-class status.
 - [x] **0.15** Coverage ratchet; structural invariant enforcement via the import graph.
-- [ ] **0.16** Backward fidelity diff — behaviour with no covering requirement. Judgement-based; design only in P0.
+- [ ] **0.16** Backward fidelity diff — behaviour with no covering requirement. **Splits in two:** the structural half (an endpoint, table, dependency or package no spec declares) is set arithmetic and belongs in the script; the semantic half needs judgement and stays a reviewer task. Design only in P0.
+
+> **The deterministic backbone** ([`deterministic-backbone.md`](../.rla/specs/deterministic-backbone.md), ① awaiting ratification).
+> Everything whose output is an exit code runs in one place, as one of two modes, and writes one
+> artifact — because the alternative was measured at 10–30× the cost with an unstable verdict
+> ([ADR-027](decisions.md#adr-027--a-deterministic-verdict-is-an-exit-code-and-judgement-reads-it)).
+
+- [x] **0.19** **Modes as the unit of running:** `gate fast` (tiers 0–1) and `gate full` (0–3), with every deferred check named in the output. Tiers stay the unit of classification.
+- [x] **0.20** **Evidence artifact** — `.rla/state/verify-<mode>-<fingerprint>.json`: per step the verdict, exit code, duration, cache status, evidence counts, guard results; plus deferrals and the obligations owed to judgement. `gate evidence` serves it, or refuses when the fingerprint has moved on.
+- [x] **0.21** **Guards** — empty-run floors, the test-count ratchet in [`.rla/test-baseline.txt`](../.rla/test-baseline.txt), step budgets, and cache hits re-judged against their recorded counts. Guards may worsen a verdict, never improve one ([ADR-028](decisions.md#adr-028--counts-are-evidence-and-every-convenience-buys-a-guard)).
+- [x] **0.22** **Measured wall clock** — `gate timings [-record]`, baseline committed in [`.rla/tool-timings.json`](../.rla/tool-timings.json), drift reported on every run. Budgets are ceilings set after measuring: `fast` 5.8 s of 2 min, `full` 10.4 s of 30 min.
+- [ ] **0.23** Guard liveness in `gate canary` — trip each guard deliberately (delete a test, exceed a budget, corrupt a cached count) and prove it turns red. Guards that die are invisible until something needed them.
 
 ### De-risking spike
 
@@ -198,6 +209,7 @@ Detail: [`architecture.md`](architecture.md) · Wire formats: [`protocol.md`](pr
 **Done when**
 
 - `make cli server` builds; `make verify` and `make canary` are green.
+- `make fast` finishes well inside its measured budget and **names every check it deferred**; deleting a test turns the suite red on the *baseline* guard rather than on an assertion.
 - `make docker-up` brings up NATS + relay; `/healthz` answers.
 - Flutter app runs on a simulator.
 - The ACP matrix is written up in `protocol.md`.
@@ -230,8 +242,8 @@ Detail: [`architecture.md`](architecture.md) · Wire formats: [`protocol.md`](pr
 
 - [ ] **1.7** `rla setup` — detect installed agents, install missing ones via **their own official installers**, run their login flows, verify.
 - [ ] **1.8** Role configuration in `~/.rla/config.yaml`: which agent fills Coder, Reviewer, Explorer — and at which **tier**, grinding or arbitration ([ADR-017](decisions.md#adr-017--cheap-models-grind-an-expensive-model-arbitrates)). Collapsing every role onto one agent stays legal.
-- [ ] **1.9** **Handoff:** implement → collect diff → run gates → hand diff + spec + gate findings to the Reviewer.
-- [ ] **1.10** Reviewer prompt construction: spec, diff, gate output, and an explicit instruction to disprove rather than confirm.
+- [ ] **1.9** **Handoff:** implement → collect diff → run gates → hand diff + spec + **the evidence artifact** to the Reviewer. The Reviewer reads it and runs no tools ([ADR-027](decisions.md#adr-027--a-deterministic-verdict-is-an-exit-code-and-judgement-reads-it)); re-running a decided question costs an order of magnitude more and answers it less reliably.
+- [ ] **1.10** Reviewer prompt construction: spec, diff, artifact, and an explicit instruction to disprove rather than confirm. **Trigger-bounded** — once at convergence, never per round, and its output never blocks a round.
 - [ ] **1.11** Finding aggregation: reviewer output plus gate output into one evidence set.
 - [ ] **1.12** Iteration loop with a bounded budget; hard stop with a loud report.
 - [ ] **1.13** **Unified approval queue** — permission requests from every agent in one place, one decision each.
@@ -239,9 +251,9 @@ Detail: [`architecture.md`](architecture.md) · Wire formats: [`protocol.md`](pr
 ### Specs & gates
 
 - [ ] **1.14** `rla spec new|list|ratify` — artifact lifecycle from the CLI.
-- [ ] **1.15** Gate engine promoted from `scripts/gate` into `internal/verify` as a library.
-- [ ] **1.16** Language-agnostic gate configuration (Go, Dart, Python, JS toolchains).
-- [ ] **1.17** Evidence bundle: what ran, what passed, what could not be verified, what the reviewer found. **Raw form** — retained, and the appeal path behind every decision object.
+- [ ] **1.15** Gate engine promoted from `scripts/gate` into `internal/verify` as a library — **including the run artifact, guards and measured timings** ([0.19–0.22](#verification-system--the-products-core-running-on-itself)), which are the same objects, not parallel ones.
+- [ ] **1.16** Language-agnostic gate configuration (Go, Dart, Python, JS toolchains). **Per language, measure before tiering** — the guard set is adapted to what that toolchain actually hides, never ported verbatim ([ADR-028](decisions.md#adr-028--counts-are-evidence-and-every-convenience-buys-a-guard)).
+- [ ] **1.17** Evidence bundle: the run artifact plus what the reviewer found. **Raw form** — retained, and the appeal path behind every decision object. Freshness is a fingerprint: a bundle describing a tree that has moved on is not served.
 - [ ] **1.18** Fail-loud end to end: an agent crash or a skipped gate blocks the readiness verdict.
 
 ### Fallback path ➕
@@ -289,7 +301,7 @@ Detail: [`architecture.md`](architecture.md) · Wire formats: [`protocol.md`](pr
 
 - Two different agents, two different subscriptions and two tiers run T1 and T2 on one task — and configuring them to the **same** model halts the ladder instead of passing it.
 - A deliberately incomplete implementation is caught — by the gates, by the reviewer, or both.
-- The reviewer's findings and the gate evidence arrive as one bundle.
+- The reviewer's findings and the gate evidence arrive as one bundle — **and the reviewer ran no tools of its own**, asserted by test on the tool-call log.
 - A draft spec or module blocks the readiness verdict.
 - Approvals from several agents queue in one place and each resolves exactly once.
 - No agent's API key is ever visible to the orchestrator (asserted by test).

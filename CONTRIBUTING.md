@@ -90,15 +90,25 @@ will later ship as a feature — see [`docs/development-loop.md`](docs/developme
 and read it before your first PR:
 
 ```bash
-make t0      # after every edit      — format, compile, vet     (seconds)
-make t1      # every iteration       — lint, tests, conformance (~10s)
-make t2      # at convergence        — coverage, spec fidelity  (~30s)
-make t3      # candidate-complete    — race, CVE scan           (minutes)
-make verify  # before you test by hand
+make fast      # after every change — tiers 0–1                  (measured: 5.8s)
+make full      # at convergence     — tiers 0–3                   (measured: 10.4s)
+make verify    # before you test by hand
+make evidence  # the artifact a review pass reads, rather than re-running the gates
 ```
+
+`make t0` … `make t3` still run a single tier when that is what you want.
+**Modes are what you invoke; tiers are how checks are classified** — and `fast`
+closes by naming every check it did *not* run, because a skipped gate and a
+passing one look identical in a green summary.
 
 Three statuses, not two: 🟢 passed, 🔴 failed, and ⚠️ **could not verify** — a
 gate that did not run. The third is not a pass, and it blocks readiness.
+
+Gates also report **how much they examined**. A suite that runs zero tests
+exits 0 exactly like a healthy one, so counts are held to floors and to the
+ratchet in `.rla/test-baseline.txt`. If your change legitimately removes tests,
+lowering that number is a deliberate line in your diff — like the coverage
+floor, never a side effect.
 
 Anything beyond a bug fix starts with a spec in `.rla/specs/` that a human
 ratifies before code is written. `make spec` shows what is outstanding.
